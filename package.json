@@ -1,0 +1,15 @@
+{
+  "name": "cashbook",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Credit card transaction tracking system for shop owners",
+  "scripts": {
+    "install:all": "npm --prefix backend install && npm --prefix frontend install",
+    "seed": "npm --prefix backend run seed",
+    "dev:api": "npm --prefix backend run dev",
+    "dev:web": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start:api": "npm --prefix backend start",
+    "start:web": "npm --prefix frontend start"
+  }
+}

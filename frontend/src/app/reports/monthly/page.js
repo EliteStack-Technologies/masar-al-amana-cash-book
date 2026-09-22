@@ -1,0 +1,132 @@
+'use client';
+
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { AppShell } from '@/components/AppShell';
+import { api, qs } from '@/lib/api';
+import { thisMonthInput, money, moneyShort } from '@/lib/format';
+import { Card, Empty, ErrorNote, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
+import {
+  ExportButtons, PeriodPicker, ReportBreakdown, ReportHeadline,
+} from '@/components/ReportBits';
+import { IconChart, IconChevron } from '@/components/Icons';
+
+export default function MonthlyReportPage() {
+  const [month, setMonth] = useState(thisMonthInput());
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    setError('');
+
+    api(`/reports/monthly${qs({ month })}`)
+      .then((d) => alive && setData(d))
+      .catch((err) => alive && setError(err.message));
+
+    return () => {
+      alive = false;
+    };
+  }, [month]);
+
+  const peak = data ? Math.max(...data.days.map((d) => d.cardAmount), 1) : 1;
+
+  return (
+    <AppShell title="One month" subtitle={month} back>
+      <div className="space-y-5">
+        <PeriodPicker type="month" label="Month" value={month} onChange={setMonth} />
+
+        <ErrorNote>{error}</ErrorNote>
+
+        {!data && !error ? (
+          <div className="space-y-2.5">
+            <Skeleton className="h-[180px]" />
+            <Skeleton className="h-[280px]" />
+          </div>
+        ) : data ? (
+          <div className="space-y-5 rise">
+            <ReportHeadline summary={data.summary} />
+            <ReportBreakdown summary={data.summary} />
+
+            {data.income && (
+              <section>
+                <SectionTitle>Income, expenses & loans</SectionTitle>
+                <Card className="ruled py-0">
+                  <Row label="Other income" value={data.income.amount} tone="leaf" />
+                  <Row label="Expenses" value={data.expense.amount} tone="stamp" />
+                  <Row label="Loans given" value={data.loans.given.amount} />
+                  <Row label="Loan repayments" value={data.loans.repaid.amount} tone="leaf" />
+                </Card>
+              </section>
+            )}
+
+            <ExportButtons params={{ type: 'monthly', month }} />
+
+            <section>
+              <SectionTitle>Day-wise breakdown</SectionTitle>
+              {data.days.length ? (
+                <Card className="ruled py-0">
+                  {data.days.map((day) => (
+                    <DayRow key={day.date} day={day} peak={peak} />
+                  ))}
+                </Card>
+              ) : (
+                <Empty
+                  icon={IconChart}
+                  title="No entries this month"
+                  hint="Choose another month from the picker above."
+                />
+              )}
+            </section>
+          </div>
+        ) : null}
+      </div>
+    </AppShell>
+  );
+}
+
+/** One day in the breakdown. The bar is scaled against the busiest day,
+    so the month's shape is readable at a glance. */
+function DayRow({ day, peak }) {
+  const dayNum = day.date.slice(8);
+  const weekday = new Intl.DateTimeFormat('en-AE', { weekday: 'short' }).format(
+    new Date(`${day.date}T12:00:00`)
+  );
+
+  return (
+    <Link
+      href={`/reports/daily?date=${day.date}`}
+      className="flex items-center gap-3.5 px-4 py-3 active:bg-[var(--paper-2)]"
+    >
+      <div className="w-8 shrink-0">
+        <p className="sum text-[18px] leading-none">{dayNum}</p>
+        <p className="colhead mt-1">{weekday}</p>
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="sum text-[14px]">{money(day.cardAmount)}</span>
+          <span className="sum text-[12px] !font-semibold text-leaf-500 dark:text-leaf-400">
+            +{moneyShort(day.ownerCommission)}
+          </span>
+        </div>
+        <div className="mt-1.5 h-1.5 bg-[var(--paper-2)]">
+          <div
+            className={cx('h-full', day.pendingCount > 0 ? 'bg-stamp-500' : 'bg-ink-900 dark:bg-ink-200')}
+            style={{ width: `${Math.max(3, (day.cardAmount / peak) * 100)}%` }}
+          />
+        </div>
+        <p className="mt-1 text-[11px] muted-2">
+          {day.count} {day.count === 1 ? 'entry' : 'entries'} · cash{' '}
+          {moneyShort(day.customerReceived)}
+          {day.pendingCount > 0 && ` · ${day.pendingCount} still owed`}
+        </p>
+      </div>
+
+      <span className="muted-2">
+        <IconChevron size={15} />
+      </span>
+    </Link>
+  );
+}
