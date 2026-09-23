@@ -2,8 +2,8 @@ import User from './models/User.js';
 
 /** The shop's only two logins. The API makes sure they exist on every start. */
 export const OWNER_ACCOUNTS = [
-  { name: 'Shop Owner 1', email: 'owner1@masaralamana.ae', password: '123456' },
-  { name: 'Shop Owner 2', email: 'owner2@masaralamana.ae', password: '123456' },
+  { name: 'Rinash', email: 'rinash@masaralamana.ae', password: 'pass@1121' },
+  { name: 'Mujeeb', email: 'mujeeb@masaralamana.ae', password: 'pass@1122' },
 ];
 
 /**
