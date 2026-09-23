@@ -46,7 +46,8 @@ You need **MongoDB running locally** on `mongodb://127.0.0.1:27017`.
 # 1. install (once)
 npm run install:all
 
-# 2. create the two shop-owner logins (once)
+# 2. (optional) the API creates the two owner logins on first start;
+#    `npm run seed` resets their passwords to the ones in backend/.env
 npm run seed
 
 # 3. start both servers — in two terminals
@@ -76,13 +77,15 @@ Both accounts are logins for the **same shop** — they see and edit the same
 transactions. Credentials live in `backend/.env`:
 
 ```
-OWNER1_EMAIL=owner1@cashbook.local
-OWNER1_PASSWORD=Owner@123
+OWNER1_EMAIL=owner1@masaralamana.ae
+OWNER1_PASSWORD=123456
 
-OWNER2_EMAIL=owner2@cashbook.local
-OWNER2_PASSWORD=Owner@456
+OWNER2_EMAIL=owner2@masaralamana.ae
+OWNER2_PASSWORD=123456
 ```
 
+The API creates these logins automatically when it starts (including on
+every deploy) if they do not exist yet; it never resets an existing password.
 Change those values and re-run `npm run seed` to update them, or change a
 password from inside the app under **Profile → Change password**.
 

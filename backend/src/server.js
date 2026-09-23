@@ -4,6 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 
 import { connectDB } from './config/db.js';
+import { ensureOwners } from './owners.js';
 import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/error.js';
 
@@ -26,6 +27,7 @@ app.use(errorHandler);
 const port = process.env.PORT || 5000;
 
 connectDB()
+  .then(() => ensureOwners())
   .then(() => {
     app.listen(port, () => console.log(`[api] listening on http://localhost:${port}/api`));
   })
