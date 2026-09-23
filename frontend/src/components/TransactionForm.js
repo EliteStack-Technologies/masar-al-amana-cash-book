@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
-import { money, moneyShort, preview, counterFor, rateFor, toLocalInput } from '@/lib/format';
+import { money, moneyShort, preview, counterFor, toLocalInput } from '@/lib/format';
 import { Button, Card, ErrorNote, Field, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
 
 const QUICK_AMOUNTS = [1000, 2000, 5000, 10000];
@@ -27,7 +27,7 @@ export const emptyTransaction = (user) => ({
   amount: '',
   counter: '',
   commissionType: 'included',
-  custPercent: String(user?.defaultCommissionPercent ?? 3),
+  custPercent: String(user?.defaultCommissionPercent ?? 2.9),
   cardRefNumber: '',
   notes: '',
   txnDate: toLocalInput(),
@@ -120,19 +120,6 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
       counter: f.amount
         ? String(counterFor(Number(f.amount), custPercent, f.commissionType))
         : f.counter,
-    }));
-  };
-
-  /** Rounding the derived figure by hand re-reads the rate from it. */
-  const setCounter = (e) => {
-    const counter = e.target.value;
-    setForm((f) => ({
-      ...f,
-      counter,
-      custPercent:
-        f.amount && counter !== ''
-          ? String(rateFor(Number(f.amount), Number(counter), f.commissionType))
-          : f.custPercent,
     }));
   };
 
@@ -238,9 +225,7 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
       </section>
 
       <section>
-        <SectionTitle
-          action={<Link href="/customers/new" className="text-[12px] font-semibold text-brand-500">+ New</Link>}
-        >
+        <SectionTitle>
           Customer · optional
         </SectionTitle>
         <Card className="space-y-3.5">
@@ -339,7 +324,7 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Charge to customer %" hint="Your rate on this swipe">
+            <Field label="Charge to customer  %" hint="Your rate on this swipe">
               <input
                 className="field ref"
                 type="number"
@@ -354,21 +339,14 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
             </Field>
             <Field
               label={excluded ? 'Swipe the card for' : 'Cash to hand over'}
-              hint="Round it — the % follows"
+              hint={excluded ? 'Cash plus the charge' : 'Amount after commission'}
             >
+              {/* Worked out from the amount and %, so it is shown, not typed. */}
               <div className="relative">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 sum text-[11px] muted-2">AED</span>
-                <input
-                  className="field sum pl-12"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={form.counter}
-                  onChange={setCounter}
-                  required
-                />
+                <div className={cx('field sum pl-12 flex items-center', !form.counter && 'muted-2')}>
+                  {(Number(form.counter) || 0).toFixed(2)}
+                </div>
               </div>
             </Field>
           </div>
@@ -439,9 +417,9 @@ function MachineCard({ machine, index, active, onClick }) {
         active ? 'ring-2 ring-brand-500 ring-offset-2 ring-offset-[var(--paper)]' : 'opacity-90'
       )}
     >
-      <span className="ref absolute right-3 top-2.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold">
+      {/* <span className="ref absolute right-3 top-2.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-semibold">
         {machine.supplierPercent ? `${machine.supplierPercent}%` : 'no %'}
-      </span>
+      </span> */}
       <div className="absolute inset-x-3 bottom-2.5">
         <p className="truncate text-[13.5px] font-bold leading-tight">{machine.name}</p>
         <p className="ref truncate text-[10px] text-white/80">{machine.cardCompany || machine.machineNumber}</p>
@@ -478,42 +456,47 @@ function Preview({ calc, machine }) {
   const empty = !calc.swipedAmount;
   const excluded = calc.commissionType === 'excluded';
 
-  return (
-    <section>
-      <SectionTitle>Working</SectionTitle>
-      <div className="card p-4">
-        <div className="flex items-baseline justify-between gap-3 pb-3">
-          <span className="colhead">Cash to customer</span>
-          <span className="sum text-[28px] leading-none">{money(calc.givenAmount)}</span>
-        </div>
+  // return (
+  //   <section>
+  //     <SectionTitle>Working</SectionTitle>
+  //     <div className="card p-4">
+  //       <div className="flex items-baseline justify-between gap-3 pb-3">
+  //         <span className="colhead">Cash to customer</span>
+  //         <span className="sum text-[28px] leading-none">{money(calc.givenAmount)}</span>
+  //       </div>
 
-        {empty ? (
-          <div className="border-t border-[var(--rule)] pt-3">
-            <p className="text-[12.5px] muted-2">Enter an amount to see the working.</p>
-          </div>
-        ) : (
-          <div className="ruled border-t border-[var(--rule)]">
-            <Row label="Swiped on the card" value={calc.swipedAmount} strong />
-            <Row
-              label="Charge to customer"
-              sub={
-                excluded
-                  ? `${calc.custPercent}% on top of the cash`
-                  : `${calc.custPercent}% of the swipe`
-              }
-              value={calc.chargeToCustomer}
-            />
-            <Row
-              label="Supplier fee"
-              sub={`${calc.supplierPercent}% to ${machine?.cardCompany || machine?.name || 'the card company'}`}
-              value={calc.supplierFee}
-              tone="stamp"
-            />
-            <Row label="Margin" sub="Charge less the supplier fee" value={calc.margin} tone="leaf" strong />
-            <Row label="Supplier A/C" sub="What should land in your account" value={calc.supplierAccount} />
-          </div>
-        )}
-      </div>
-    </section>
-  );
+  //       {empty ? (
+  //         <div className="border-t border-[var(--rule)] pt-3">
+  //           <p className="text-[12.5px] muted-2">Enter an amount to see the working.</p>
+  //         </div>
+  //       ) : (
+  //         <div className="ruled border-t border-[var(--rule)]">
+  //           <Row
+  //             label="Swiped on the card"
+  //             sub={excluded ? 'Cash entered + charge' : 'The amount entered, charge included'}
+  //             value={calc.swipedAmount}
+  //             strong
+  //           />
+  //           <Row
+  //             label="Charge to customer"
+  //             sub={
+  //               excluded
+  //                 ? `${calc.custPercent}% of the cash + ${calc.custPercent}%, added on top`
+  //                 : `${calc.custPercent}% of the swipe, taken out of it`
+  //             }
+  //             value={calc.chargeToCustomer}
+  //           />
+  //           <Row
+  //             label="Supplier fee"
+  //             sub={`${calc.supplierPercent}% to ${machine?.cardCompany || machine?.name || 'the card company'}`}
+  //             value={calc.supplierFee}
+  //             tone="stamp"
+  //           />
+  //           <Row label="Margin" sub="Charge less the supplier fee" value={calc.margin} tone="leaf" strong />
+  //           <Row label="Supplier A/C" sub="What should land in your account" value={calc.supplierAccount} />
+  //         </div>
+  //       )}
+  //     </div>
+  //   </section>
+  // );
 }

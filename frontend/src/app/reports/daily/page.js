@@ -7,9 +7,8 @@ import { TransactionCard } from '@/components/TransactionCard';
 import { api, qs } from '@/lib/api';
 import { todayInput, dateOnly, dateTime, money } from '@/lib/format';
 import { Button, Card, ErrorNote, Field, Row, SectionTitle, Skeleton, Empty, StatusPill } from '@/components/ui';
-import {
-  ExportButtons, PeriodPicker, ReportBreakdown, ReportHeadline,
-} from '@/components/ReportBits';
+import { PeriodPicker, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
+import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconList, IconCheck, IconClock } from '@/components/Icons';
 
 export default function DailyReportPage() {
@@ -44,7 +43,12 @@ function DailyReport() {
   }, [date, reload]);
 
   return (
-    <AppShell title="One day" subtitle={dateOnly(`${date}T12:00:00`)} back>
+    <AppShell
+      title="One day"
+      subtitle={dateOnly(`${date}T12:00:00`)}
+      back
+      action={<DownloadMenu params={{ type: 'daily', date }} copies={PERIOD_COPIES} />}
+    >
       <div className="space-y-5">
         <PeriodPicker type="date" label="Date" value={date} onChange={setDate} />
 
@@ -79,8 +83,6 @@ function DailyReport() {
                 </Card>
               </section>
             )}
-
-            <ExportButtons params={{ type: 'daily', date }} />
 
             <section>
               <SectionTitle>{data.transactions.length} {data.transactions.length === 1 ? 'entry' : 'entries'}</SectionTitle>

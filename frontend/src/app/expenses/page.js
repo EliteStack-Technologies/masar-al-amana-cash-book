@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
-import { api, qs, downloadUrl } from '@/lib/api';
+import { api, qs } from '@/lib/api';
 import { money, dateOnly } from '@/lib/format';
 import { Button, Card, Empty, ErrorNote, Figure, Skeleton } from '@/components/ui';
-import { IconArrowDown, IconSearch, IconChevron, IconPlus, IconDownload } from '@/components/Icons';
+import { IconArrowDown, IconSearch, IconChevron, IconPlus } from '@/components/Icons';
+import { DownloadMenu } from '@/components/DownloadMenu';
 
 export default function ExpensesPage() {
   const [q, setQ] = useState('');
@@ -31,11 +32,7 @@ export default function ExpensesPage() {
     <AppShell
       title="Expenses"
       subtitle={data ? `${data.total} entries` : 'Loading…'}
-      action={
-        <Link href="/expenses/new" aria-label="Add expense" className="flex size-9 items-center justify-center border border-[var(--rule-strong)] active:bg-[var(--paper-2)]">
-          <IconPlus size={18} />
-        </Link>
-      }
+      action={<DownloadMenu params={{ type: 'expenses' }} label="Download expense" />}
     >
       <div className="space-y-4">
         <div className="relative">
@@ -51,13 +48,11 @@ export default function ExpensesPage() {
           <div className="space-y-4 rise">
             <Card className="p-3.5"><Figure label="Total expenses (filtered)" value={money(data.totals.amount)} tone="stamp" size="lg" /></Card>
 
-            <div className="flex gap-2.5">
-              {['excel', 'pdf'].map((f) => (
-                <a key={f} href={downloadUrl(f, { type: 'expenses' })} target="_blank" rel="noreferrer" className="flex-1">
-                  <Button type="button" variant="soft" className="w-full"><IconDownload size={16} /> {f === 'excel' ? 'Excel' : 'PDF'}</Button>
-                </a>
-              ))}
-            </div>
+            <Link href="/expenses/new" className="block">
+              <Button type="button" variant="stamp" className="w-full">
+                <IconPlus size={17} /> Add expense
+              </Button>
+            </Link>
 
             <div className="card ruled py-0">
               {data.items.map((it) => (

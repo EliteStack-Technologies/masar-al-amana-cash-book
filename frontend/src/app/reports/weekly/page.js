@@ -7,7 +7,8 @@ import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
 import { todayInput, dateOnly, money, moneyShort } from '@/lib/format';
 import { Card, Empty, ErrorNote, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
-import { ExportButtons, PeriodPicker, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
+import { PeriodPicker, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
+import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconChart, IconChevron } from '@/components/Icons';
 
 export default function WeeklyReportPage() {
@@ -41,6 +42,7 @@ function WeeklyReport() {
       title="One week"
       subtitle={data ? `${dateOnly(`${data.start}T12:00:00`)} – ${dateOnly(`${data.end}T12:00:00`)}` : 'Mon to Sun'}
       back
+      action={<DownloadMenu params={{ type: 'weekly', date }} copies={PERIOD_COPIES} />}
     >
       <div className="space-y-5">
         <PeriodPicker type="date" label="Any day in the week" value={date} onChange={setDate} />
@@ -62,8 +64,6 @@ function WeeklyReport() {
                 <Row label="Loan repayments" value={data.loans.repaid.amount} tone="leaf" />
               </Card>
             </section>
-
-            <ExportButtons params={{ type: 'weekly', date }} />
 
             <section>
               <SectionTitle>Day by day</SectionTitle>

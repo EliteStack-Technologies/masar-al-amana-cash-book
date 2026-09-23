@@ -2,13 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
-import { useAuth } from '@/components/AuthProvider';
 import { api } from '@/lib/api';
 import { CustomerForm, emptyCustomer } from '@/components/CustomerForm';
 
 export default function NewCustomerPage() {
   const router = useRouter();
-  const { user } = useAuth();
 
   const create = async (payload) => {
     const { customer } = await api('/customers', { method: 'POST', body: payload });
@@ -18,7 +16,7 @@ export default function NewCustomerPage() {
   return (
     <AppShell title="New customer" subtitle="Add someone to your book" back>
       <CustomerForm
-        initial={emptyCustomer(user)}
+        initial={emptyCustomer()}
         submitLabel="Save customer"
         busyLabel="Saving…"
         onSubmit={create}

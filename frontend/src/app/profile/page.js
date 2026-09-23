@@ -13,7 +13,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState({
     name: user?.name || '',
     shopName: user?.shopName || '',
-    defaultCommissionPercent: String(user?.defaultCommissionPercent ?? 3),
+    defaultCommissionPercent: String(user?.defaultCommissionPercent ?? 2.9),
     defaultOwnerSharePercent: String(user?.defaultOwnerSharePercent ?? 50),
   });
   const [profileMsg, setProfileMsg] = useState('');

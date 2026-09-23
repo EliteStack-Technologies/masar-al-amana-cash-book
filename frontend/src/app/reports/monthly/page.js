@@ -6,9 +6,8 @@ import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
 import { thisMonthInput, money, moneyShort } from '@/lib/format';
 import { Card, Empty, ErrorNote, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
-import {
-  ExportButtons, PeriodPicker, ReportBreakdown, ReportHeadline,
-} from '@/components/ReportBits';
+import { PeriodPicker, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
+import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconChart, IconChevron } from '@/components/Icons';
 
 export default function MonthlyReportPage() {
@@ -33,7 +32,12 @@ export default function MonthlyReportPage() {
   const peak = data ? Math.max(...data.days.map((d) => d.swipedAmount), 1) : 1;
 
   return (
-    <AppShell title="One month" subtitle={month} back>
+    <AppShell
+      title="One month"
+      subtitle={month}
+      back
+      action={<DownloadMenu params={{ type: 'monthly', month }} copies={PERIOD_COPIES} />}
+    >
       <div className="space-y-5">
         <PeriodPicker type="month" label="Month" value={month} onChange={setMonth} />
 
@@ -60,8 +64,6 @@ export default function MonthlyReportPage() {
                 </Card>
               </section>
             )}
-
-            <ExportButtons params={{ type: 'monthly', month }} />
 
             <section>
               <SectionTitle>Day-wise breakdown</SectionTitle>

@@ -10,8 +10,8 @@ import {
 } from '@/components/Icons';
 
 const TABS = [
-  { href: '/dashboard', label: 'Book', icon: IconHome },
-  { href: '/cashbook', label: 'Cash book', icon: IconList },
+  { href: '/dashboard', label: 'Dashboard', icon: IconHome },
+  { href: '/cashbook', label: 'Book', icon: IconList },
   { href: '/transactions/new', label: 'Enter', icon: IconPlus, stamp: true },
   { href: '/reports', label: 'Reports', icon: IconChart },
   { href: '/more', label: 'More', icon: IconGrid },

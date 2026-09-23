@@ -66,64 +66,93 @@ export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 10
 
 const has = (v) => v !== undefined && v !== null && v !== '';
 
-export function preview({
-  swipedAmount,
-  givenAmount,
-  custPercent,
-  commissionType = 'included',
-  supplierPercent,
-}) {
+/**
+ * Money maths in integers, so no binary-float drift leaks into an amount:
+ * amounts in fils (1/100 AED) and rates in 1/10,000 of a percent, so a rate is
+ * used as typed, never rounded. A fils x rate product is exact.
+ */
+const fils = (n) => Math.round((Number(n) || 0) * 100);
+const rateUnits = (pct) => Math.round((Number(pct) || 0) * 10000);
+
+/** amount x pct%, rounded half-up to a whole dirham, returned in fils. */
+const wholeDirhamsOf = (amountFils, ru) => Math.floor((amountFils * ru + 50000000) / 100000000) * 100;
+
+/** amount x pct%, rounded half-up to the fil, returned in fils. */
+const filsOf = (amountFils, ru) => Math.floor((amountFils * ru + 500000) / 1000000);
+
+/**
+ * Card-swipe maths, exactly as the shop's Card Swipe Details sheet does it.
+ * The customer charge is the rate of the amount the owner typed:
+ *
+ *   'included' - the amount is what the card is swiped for, and the charge
+ *                comes out of it, rounded to the nearest whole dirham:
+ *                4,311 @ 2.57% -> 110.79 -> charge 111, cash 4,200
+ *   'excluded' - the amount is the cash the customer walks away with, and the
+ *                charge goes on top. The rate is applied twice: once on the
+ *                cash, then again on the cash plus that first charge, and
+ *                the second charge is what is added (each to the fil). The
+ *                swipe is then rounded to the nearest whole dirham and the
+ *                charge is whatever that leaves over the cash:
+ *                4,200 @ 2.57% -> 107.94 -> 4,307.94 x 2.57% = 110.71,
+ *                4,310.71 -> swipe 4,311, charge 111
+ *
+ * Either way cash + charge = swipe. The supplier (card company) keeps its
+ * rate of the swipe, to the fil, and pays the rest into the owner's account;
+ * the margin is the charge less that fee.
+ */
+function swipeMaths({ swipedAmount, givenAmount, custPercent, commissionType, supplierPercent }) {
   const excluded = commissionType === 'excluded';
-  const supplierPct = Number(supplierPercent) || 0;
+  const cr = rateUnits(custPercent);
+  const sr = rateUnits(supplierPercent);
+  // Without a rate (a legacy row), the stored pair is the truth.
+  const byRate = has(custPercent);
 
-  let swiped;
-  let given;
-  let chargeToCustomer;
-
-  if (has(swipedAmount) && has(givenAmount)) {
-    swiped = round2(swipedAmount);
-    given = round2(givenAmount);
-    chargeToCustomer = round2(swiped - given);
-  } else if (excluded) {
-    given = round2(givenAmount || 0);
-    chargeToCustomer = round2((given * (Number(custPercent) || 0)) / 100);
-    swiped = round2(given + chargeToCustomer);
+  let swipe; // fils
+  let cash; // fils
+  if (excluded) {
+    cash = fils(givenAmount);
+    if (byRate) {
+      const firstCharge = filsOf(cash, cr);
+      const secondCharge = filsOf(cash + firstCharge, cr);
+      // Swiped in whole dirhams, half-up.
+      swipe = Math.floor((cash + secondCharge + 50) / 100) * 100;
+    } else {
+      swipe = fils(swipedAmount);
+    }
   } else {
-    swiped = round2(swipedAmount || 0);
-    chargeToCustomer = round2((swiped * (Number(custPercent) || 0)) / 100);
-    given = round2(swiped - chargeToCustomer);
+    swipe = fils(swipedAmount);
+    cash = byRate ? swipe - wholeDirhamsOf(swipe, cr) : fils(givenAmount);
   }
 
-  const base = excluded ? given : swiped;
-  const supplierFee = round2((swiped * supplierPct) / 100);
+  const charge = swipe - cash; // fils
+  const fee = filsOf(swipe, sr);
 
   return {
-    swipedAmount: swiped,
-    givenAmount: given,
-    chargeToCustomer,
-    custPercent: base ? round2((chargeToCustomer / base) * 100) : 0,
+    swipedAmount: swipe / 100,
+    givenAmount: cash / 100,
+    chargeToCustomer: charge / 100,
+    custPercent: byRate ? cr / 10000 : cash ? round2((charge / cash) * 100) : 0,
     commissionType: excluded ? 'excluded' : 'included',
-    supplierPercent: round2(supplierPct),
-    supplierFee,
-    supplierAccount: round2(swiped - supplierFee),
-    margin: round2(chargeToCustomer - supplierFee),
+    supplierPercent: sr / 10000,
+    supplierFee: fee / 100,
+    supplierAccount: (swipe - fee) / 100,
+    margin: (charge - fee) / 100,
   };
 }
+
+export const preview = ({ swipedAmount, givenAmount, custPercent, commissionType = 'included', supplierPercent }) =>
+  swipeMaths({ swipedAmount, givenAmount, custPercent, commissionType, supplierPercent });
 
 /**
  * The other half of the deal: the figure the form derives from the amount the
  * owner typed. Included -> the cash to hand over; excluded -> the swipe.
  */
 export const counterFor = (amount, pct, commissionType) => {
-  const a = round2(amount || 0);
-  const charge = round2((a * (Number(pct) || 0)) / 100);
-  return commissionType === 'excluded' ? round2(a + charge) : round2(a - charge);
-};
-
-/** The rate implied when the owner rounds that derived figure by hand. */
-export const rateFor = (amount, counter, commissionType) => {
-  const a = round2(amount || 0);
-  if (!a) return 0;
-  const charge = commissionType === 'excluded' ? round2(counter - a) : round2(a - counter);
-  return round2((charge / a) * 100);
+  const r = swipeMaths({
+    swipedAmount: amount,
+    givenAmount: amount,
+    custPercent: Number(pct) || 0,
+    commissionType,
+  });
+  return commissionType === 'excluded' ? r.swipedAmount : r.givenAmount;
 };

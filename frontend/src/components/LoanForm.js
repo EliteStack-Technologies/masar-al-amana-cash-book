@@ -6,38 +6,41 @@ import { todayInput } from '@/lib/format';
 import { Button, Card, ErrorNote, Field, SectionTitle, Skeleton } from '@/components/ui';
 
 export const emptyLoan = () => ({
-  customer: '',
+  account: '',
   lenderName: '',
+  lenderMobile: '',
   principal: '',
   entryDate: todayInput(),
   notes: '',
 });
 
 export const toLoanValues = (l) => ({
-  customer: l.customer?._id || l.customer || '',
+  account: l.account?._id || l.account || '',
   lenderName: l.lenderName || '',
+  lenderMobile: l.lenderMobile || '',
   principal: String(l.principal ?? ''),
   entryDate: (l.entryDate ? new Date(l.entryDate) : new Date()).toISOString().slice(0, 10),
   notes: l.notes || '',
 });
 
 /**
- * Cash a customer puts into the shop. Pick who it came from and type the
- * amount - that is the whole form. A name that is not on the list yet becomes
- * a customer when the loan is saved, so nothing else has to be filled in.
+ * Cash an account holder puts into the shop. Pick the account it came from and
+ * type the amount - that is the whole form. A name that is not on the list
+ * yet opens a new loan account when the loan is saved. Loan accounts are their
+ * own list; swipe customers never appear here.
  */
 export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }) {
   const [form, setForm] = useState(initial);
-  const [customers, setCustomers] = useState(null);
-  const [adding, setAdding] = useState(!initial.customer && !!initial.lenderName);
+  const [accounts, setAccounts] = useState(null);
+  const [adding, setAdding] = useState(!initial.account && !!initial.lenderName);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   useEffect(() => {
-    api('/customers?status=active&limit=200')
-      .then((d) => setCustomers(d.items))
+    api('/loans/accounts')
+      .then((d) => setAccounts(d.items))
       .catch((err) => setError(err.message));
   }, []);
 
@@ -45,27 +48,33 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
     const value = e.target.value;
     if (value === '__new') {
       setAdding(true);
-      setForm((f) => ({ ...f, customer: '', lenderName: '' }));
+      setForm((f) => ({ ...f, account: '', lenderName: '', lenderMobile: '' }));
       return;
     }
     setAdding(false);
-    const cust = customers?.find((c) => c._id === value);
-    setForm((f) => ({ ...f, customer: value, lenderName: cust?.name || '' }));
+    const acc = accounts?.find((a) => a._id === value);
+    setForm((f) => ({
+      ...f,
+      account: value,
+      lenderName: acc?.name || '',
+      lenderMobile: acc?.mobile || '',
+    }));
   };
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.customer && !form.lenderName.trim()) {
-      return setError('Choose a customer, or type a name for a new one.');
+    if (!form.account && !form.lenderName.trim()) {
+      return setError('Choose an account, or type a name for a new one.');
     }
     if (!(Number(form.principal) > 0)) return setError('Loan amount must be greater than 0.');
 
     setBusy(true);
     try {
       await onSubmit({
-        customer: form.customer || null,
+        account: form.account || null,
         lenderName: form.lenderName.trim(),
+        lenderMobile: form.lenderMobile.trim(),
         principal: Number(form.principal),
         entryDate: new Date(`${form.entryDate}T12:00:00`).toISOString(),
         notes: form.notes,
@@ -76,35 +85,47 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
     }
   };
 
-  if (!customers) return <Skeleton className="h-[220px]" />;
+  if (!accounts) return <Skeleton className="h-[220px]" />;
 
   return (
     <form onSubmit={submit} className="space-y-5 rise">
       <section>
         <SectionTitle>Who gave the cash</SectionTitle>
         <Card className="space-y-3.5">
-          <Field label="Customer">
-            <select className="field" value={adding ? '__new' : form.customer} onChange={pick}>
-              <option value="">Choose a customer</option>
-              {customers.map((c) => (
-                <option key={c._id} value={c._id}>{c.name}</option>
+          <Field label="Account name">
+            <select className="field" value={adding ? '__new' : form.account} onChange={pick}>
+              <option value="">Choose an account</option>
+              {accounts.map((a) => (
+                <option key={a._id} value={a._id}>{a.name}</option>
               ))}
-              <option value="__new">+ New customer</option>
+              <option value="__new">+ New account</option>
             </select>
           </Field>
 
           {adding ? (
-            <Field label="New customer name" hint="Saved to your customer list">
-              <input
-                className="field"
-                type="text"
-                placeholder="e.g. Rashid"
-                value={form.lenderName}
-                onChange={set('lenderName')}
-                autoFocus
-                required
-              />
-            </Field>
+            <>
+              <Field label="New account name" hint="Saved to your loan accounts">
+                <input
+                  className="field"
+                  type="text"
+                  placeholder="e.g. Rashid"
+                  value={form.lenderName}
+                  onChange={set('lenderName')}
+                  autoFocus
+                  required
+                />
+              </Field>
+              <Field label="Mobile number" hint="Optional — saved against the new account">
+                <input
+                  className="field ref"
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="05x xxx xxxx"
+                  value={form.lenderMobile}
+                  onChange={set('lenderMobile')}
+                />
+              </Field>
+            </>
           ) : null}
         </Card>
       </section>

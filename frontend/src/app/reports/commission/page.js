@@ -5,7 +5,8 @@ import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
 import { thisMonthInput, money } from '@/lib/format';
 import { Card, Divider, Empty, ErrorNote, Figure, Row, SectionTitle, Skeleton, SplitRail } from '@/components/ui';
-import { ExportButtons, PeriodPicker } from '@/components/ReportBits';
+import { PeriodPicker } from '@/components/ReportBits';
+import { DownloadMenu, REPORT_COPIES } from '@/components/DownloadMenu';
 import { IconPercent } from '@/components/Icons';
 
 export default function CommissionReportPage() {
@@ -33,7 +34,12 @@ export default function CommissionReportPage() {
     : 0;
 
   return (
-    <AppShell title="Margin" subtitle={month} back>
+    <AppShell
+      title="Margin"
+      subtitle={month}
+      back
+      action={<DownloadMenu params={{ type: 'commission', month }} copies={REPORT_COPIES} />}
+    >
       <div className="space-y-5">
         <PeriodPicker type="month" label="Month" value={month} onChange={setMonth} />
 
@@ -102,7 +108,6 @@ export default function CommissionReportPage() {
               </section>
             )}
 
-            <ExportButtons params={{ type: 'commission', month }} />
           </div>
         ) : null}
       </div>

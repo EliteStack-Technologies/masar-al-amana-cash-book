@@ -149,10 +149,9 @@ function TopLine({ loans, settlement, cash }) {
         <div className="grid grid-cols-2">
           <Link href="/loans" className="border-r border-[var(--rule)] p-3.5 active:bg-[var(--paper-2)]">
             <Figure
-              label="Total loan"
-              value={money(loans.outstanding)}
+              label="Cash in Hand"
+              value={money(cash.inHand)}
               size="lg"
-              sub={`from ${loans.openCount} open ${loans.openCount === 1 ? 'loan' : 'loans'}`}
             />
           </Link>
           <Link href="/settlements" className="p-3.5 active:bg-[var(--paper-2)]">
@@ -165,16 +164,7 @@ function TopLine({ loans, settlement, cash }) {
             />
           </Link>
         </div>
-        <Link
-          href="/cashbook"
-          className="flex items-center justify-between border-t border-[var(--rule)] px-3.5 py-3 active:bg-[var(--paper-2)]"
-        >
-          <span className="colhead">Cash in hand</span>
-          <span className="flex items-center gap-1.5">
-            <span className="sum text-[17px]">{money(cash.inHand)}</span>
-            <IconChevron size={14} />
-          </span>
-        </Link>
+       
       </Card>
     </section>
   );

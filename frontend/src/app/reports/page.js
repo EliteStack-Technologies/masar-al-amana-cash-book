@@ -54,7 +54,7 @@ const REPORTS = [
 
 export default function ReportsPage() {
   return (
-    <AppShell title="Reports" subtitle="Each one exports to Excel or PDF">
+    <AppShell title="Reports" subtitle="Download any of these — full copy or card company copy">
       <div className="card ruled rise py-0">
         {REPORTS.map(({ href, icon: Icon, title, detail }) => (
           <Link

@@ -5,7 +5,8 @@ import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
 import { money, thisMonthInput } from '@/lib/format';
 import { Card, Empty, ErrorNote, Skeleton } from '@/components/ui';
-import { PeriodPicker, ExportButtons } from '@/components/ReportBits';
+import { PeriodPicker } from '@/components/ReportBits';
+import { DownloadMenu, REPORT_COPIES } from '@/components/DownloadMenu';
 import { IconUsers } from '@/components/Icons';
 
 export default function CustomerReportPage() {
@@ -22,7 +23,12 @@ export default function CustomerReportPage() {
   }, [month]);
 
   return (
-    <AppShell title="Customer report" subtitle="Totals per customer" back>
+    <AppShell
+      title="Customer report"
+      subtitle="Totals per customer"
+      back
+      action={<DownloadMenu params={{ type: 'customer-report', month }} copies={REPORT_COPIES} />}
+    >
       <div className="space-y-5">
         <PeriodPicker type="month" label="Month" value={month} onChange={setMonth} />
         <ErrorNote>{error}</ErrorNote>
@@ -31,7 +37,6 @@ export default function CustomerReportPage() {
           <Skeleton className="h-[240px]" />
         ) : data ? (
           <div className="space-y-5 rise">
-            <ExportButtons params={{ type: 'customer-report', month }} />
             {data.customers.length ? (
               <div className="space-y-2">
                 {data.customers.map((c) => (

@@ -1,30 +1,7 @@
 'use client';
 
-import { downloadUrl } from '@/lib/api';
 import { money } from '@/lib/format';
-import { Button, Card, Figure, Row, SectionTitle, SplitRail } from '@/components/ui';
-import { IconDownload } from '@/components/Icons';
-
-/** Excel + PDF buttons wired to the same report params. */
-export function ExportButtons({ params }) {
-  return (
-    <div className="flex gap-2.5">
-      {['excel', 'pdf'].map((format) => (
-        <a
-          key={format}
-          href={downloadUrl(format, params)}
-          target="_blank"
-          rel="noreferrer"
-          className="flex-1"
-        >
-          <Button type="button" variant="soft" className="w-full">
-            <IconDownload size={17} /> {format === 'excel' ? 'Excel' : 'PDF'}
-          </Button>
-        </a>
-      ))}
-    </div>
-  );
-}
+import { Card, Figure, Row, SectionTitle, SplitRail } from '@/components/ui';
 
 /** The headline figures every report shares, set as a ruled block. */
 export function ReportHeadline({ summary }) {

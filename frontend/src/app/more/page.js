@@ -9,21 +9,22 @@ import {
 } from '@/components/Icons';
 
 const GROUPS = [
-  {
-    title: 'People & machines',
-    items: [
-      { href: '/customers', icon: IconUsers, title: 'Customers', detail: 'Names and the rate you charge them' },
-      { href: '/machines', icon: IconMachine, title: 'Card machines', detail: 'The devices you swipe on, and their supplier %' },
-    ],
-  },
+
   {
     title: 'Money in & out',
     items: [
       { href: '/income', icon: IconArrowUp, title: 'Income', detail: 'Other money the shop receives' },
       { href: '/expenses', icon: IconArrowDown, title: 'Expenses', detail: 'Rent, salary, bills and more' },
       { href: '/transactions', icon: IconList, title: 'All swipes', detail: 'Every card entry in the book' },
-      { href: '/loans', icon: IconHand, title: 'Loans', detail: 'Cash customers put in, and repayments' },
+      { href: '/loans', icon: IconHand, title: 'Loans', detail: 'Cash put in by loan accounts, and repayments' },
       { href: '/settlements', icon: IconClock, title: 'Pending settlements', detail: 'Card money still to come in' },
+    ],
+  },
+    {
+    title: 'People & machines',
+    items: [
+      { href: '/customers', icon: IconUsers, title: 'Customers', detail: 'Names and the rate you charge them' },
+      { href: '/machines', icon: IconMachine, title: 'Card machines', detail: 'The devices you swipe on, and their supplier %' },
     ],
   },
   {

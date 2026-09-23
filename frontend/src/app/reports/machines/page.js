@@ -5,7 +5,8 @@ import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
 import { money, thisMonthInput } from '@/lib/format';
 import { Card, Empty, ErrorNote, Skeleton } from '@/components/ui';
-import { PeriodPicker, ExportButtons } from '@/components/ReportBits';
+import { PeriodPicker } from '@/components/ReportBits';
+import { DownloadMenu, REPORT_COPIES } from '@/components/DownloadMenu';
 import { IconMachine } from '@/components/Icons';
 
 export default function MachineReportPage() {
@@ -22,7 +23,12 @@ export default function MachineReportPage() {
   }, [month]);
 
   return (
-    <AppShell title="Machine report" subtitle="Totals per card machine" back>
+    <AppShell
+      title="Machine report"
+      subtitle="Totals per card machine"
+      back
+      action={<DownloadMenu params={{ type: 'machine-report', month }} copies={REPORT_COPIES} />}
+    >
       <div className="space-y-5">
         <PeriodPicker type="month" label="Month" value={month} onChange={setMonth} />
         <ErrorNote>{error}</ErrorNote>
@@ -31,7 +37,6 @@ export default function MachineReportPage() {
           <Skeleton className="h-[240px]" />
         ) : data ? (
           <div className="space-y-5 rise">
-            <ExportButtons params={{ type: 'machine-report', month }} />
             {data.machines.length ? (
               <div className="space-y-2">
                 {data.machines.map((m) => (

@@ -63,7 +63,7 @@ export default function CustomersPage() {
                     <p className="truncate text-[14px] font-semibold">{c.name}</p>
                     {c.status === 'inactive' && <span className="stamp-mark muted-2">Inactive</span>}
                   </div>
-                  <p className="ref mt-0.5 text-[10.5px] muted-2">{c.mobile} · {c.commissionPercent}%{c.machine?.name ? ` · ${c.machine.name}` : ''}</p>
+                  <p className="ref mt-0.5 text-[10.5px] muted-2">{c.mobile || 'No mobile'}</p>
                 </div>
                 <span className="muted-2"><IconChevron size={16} /></span>
               </Link>
