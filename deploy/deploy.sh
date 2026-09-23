@@ -31,6 +31,14 @@ echo "==> Fetching $BRANCH"
 git fetch origin "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
+# The reset above can replace this very script. Bash keeps running the copy
+# it started with, so a fix to deploy.sh would only take effect one deploy
+# late. Hand over to the freshly checked-out version, once.
+if [ -z "${DEPLOY_SCRIPT_FRESH:-}" ]; then
+  export DEPLOY_SCRIPT_FRESH=1
+  exec bash "$APP_DIR/deploy/deploy.sh" "$@"
+fi
+
 if [ ! -f backend/.env ]; then
   echo "!! backend/.env is missing - create it from backend/.env.example first" >&2
   exit 1
