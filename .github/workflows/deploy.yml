@@ -1,4 +1,5 @@
-# Deploys to the DigitalOcean droplet whenever `production` changes.
+# Deploys the backend API to the DigitalOcean droplet whenever `production`
+# changes. The frontend is hosted on Vercel and is not deployed from here.
 #
 # Repository SECRETS (Settings -> Secrets and variables -> Actions -> Secrets):
 #   DROPLET_HOST     the droplet's IP address
@@ -6,10 +7,8 @@
 #   DROPLET_SSH_KEY  a private key whose public half is in that user's authorized_keys
 #   DROPLET_PORT     (optional) SSH port, if not 22
 #
-# Repository VARIABLES (same page -> Variables tab), all optional:
+# Repository VARIABLES (same page -> Variables tab), optional:
 #   APP_DIR          where the repo is cloned on the droplet (default /var/www/cashbook)
-#   WEB_PORT         port for the Next.js site (default 3000) - pick a free one,
-#                    other projects on the droplet may already use 3000
 name: Deploy
 
 on:
@@ -30,12 +29,11 @@ jobs:
         uses: appleboy/ssh-action@v1.2.0
         env:
           APP_DIR: ${{ vars.APP_DIR || '/var/www/cashbook' }}
-          WEB_PORT: ${{ vars.WEB_PORT || '3000' }}
         with:
           host: ${{ secrets.DROPLET_HOST }}
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: ${{ secrets.DROPLET_PORT || 22 }}
-          envs: APP_DIR,WEB_PORT
+          envs: APP_DIR
           command_timeout: 20m
           script: bash "$APP_DIR/deploy/deploy.sh"
