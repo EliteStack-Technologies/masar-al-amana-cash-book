@@ -1,6 +1,5 @@
 import mongoose from 'mongoose';
 import { nextSequence } from './Counter.js';
-
 const cardMachineSchema = new mongoose.Schema(
   {
     shopOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
