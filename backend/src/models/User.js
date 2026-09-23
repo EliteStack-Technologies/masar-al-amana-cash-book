@@ -23,7 +23,10 @@ userSchema.methods.setPassword = async function (plain) {
   this.passwordHash = await bcrypt.hash(plain, 10);
 };
 
-userSchema.methods.verifyPassword = function (plain) {
+userSchema.methods.verifyPassword = async function (plain) {
+  // A user written outside the app (e.g. by hand in mongosh) may have no hash;
+  // that is a failed sign-in, not a server error. `npm run seed` sets one.
+  if (!this.passwordHash) return false;
   return bcrypt.compare(plain, this.passwordHash);
 };
 
