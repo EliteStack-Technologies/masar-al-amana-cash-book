@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-
 import { nextSequence } from './Counter.js';
 
 const cardMachineSchema = new mongoose.Schema(
