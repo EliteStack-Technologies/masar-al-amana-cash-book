@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Brings the droplet up to date with the `production` branch and restarts the
-# app. Run by GitHub Actions on every push to production, or by hand:
-#   APP_DIR=/var/www/cashbook WEB_PORT=3000 bash /var/www/cashbook/deploy/deploy.sh
+# backend API. Run by GitHub Actions on every push to production, or by hand:
+#   APP_DIR=/home/ubuntu/cashbook bash /home/ubuntu/cashbook/deploy/deploy.sh
 #
-# Stops at the first failing step, so a broken install or build never reloads
-# the processes that are currently serving the site.
+# The droplet runs ONLY the backend. The Next.js frontend is hosted on Vercel
+# and is never installed, built or started here.
+#
+# Stops at the first failing step, so a broken install never reloads the
+# process that is currently serving the API.
 set -euo pipefail
 
 export APP_DIR="${APP_DIR:-/var/www/cashbook}"
 export BRANCH="${BRANCH:-production}"
-export WEB_PORT="${WEB_PORT:-3000}"
 
 # Non-interactive SSH sessions skip ~/.bashrc, so node/npm/pm2 installed via
 # nvm are not on PATH yet. Load nvm if it is there.
@@ -33,21 +35,22 @@ if [ ! -f backend/.env ]; then
   echo "!! backend/.env is missing - create it from backend/.env.example first" >&2
   exit 1
 fi
-if [ ! -f frontend/.env.production.local ]; then
-  echo "!! frontend/.env.production.local is missing - it must set NEXT_PUBLIC_API_URL" >&2
-  exit 1
-fi
 
 echo "==> Installing backend dependencies"
 npm --prefix backend ci --omit=dev
 
-echo "==> Installing frontend dependencies"
-npm --prefix frontend ci
+# Older PM2 entries for this app: the API first started by hand as
+# `cashbook-backend` (it would fight `cashbook-api` for the same port), and a
+# `cashbook-web` left by an earlier attempt to run the frontend here. Only
+# these two names are touched; other projects' processes are left alone.
+for legacy in cashbook-backend cashbook-web; do
+  if pm2 describe "$legacy" >/dev/null 2>&1; then
+    echo "==> Removing old PM2 process $legacy"
+    pm2 delete "$legacy"
+  fi
+done
 
-echo "==> Building frontend"
-npm --prefix frontend run build
-
-echo "==> Starting / reloading apps (web on port $WEB_PORT)"
+echo "==> Starting / reloading the API"
 pm2 startOrReload ecosystem.config.cjs --update-env
 pm2 save
 pm2 status
