@@ -26,7 +26,10 @@ export function ownerAccounts() {
  * password changed in the app survives a restart or deploy.
  */
 export async function ensureOwners({ resetPasswords = false, log = console.log } = {}) {
-  for (const acc of ownerAccounts()) {
+  const accounts = ownerAccounts();
+  log(`[owners] configured: ${accounts.map((a) => a.email.toLowerCase().trim()).join(', ')}`);
+
+  for (const acc of accounts) {
     const email = acc.email.toLowerCase().trim();
     const user = await User.findOne({ email });
 
@@ -40,6 +43,11 @@ export async function ensureOwners({ resetPasswords = false, log = console.log }
       await user.setPassword(acc.password);
       await user.save();
       log(`[owners] updated password for ${email}`);
+    } else {
+      log(`[owners] ${email} already exists - password left unchanged`);
     }
   }
+
+  const users = await User.find({}, { email: 1 }).lean();
+  log(`[owners] users in database (${users.length}): ${users.map((u) => u.email).join(', ')}`);
 }

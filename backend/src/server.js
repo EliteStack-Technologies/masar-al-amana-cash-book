@@ -1,4 +1,4 @@
-import './config/env.js';
+import { ENV_FILE } from './config/env.js';
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
@@ -25,6 +25,8 @@ app.use(notFound);
 app.use(errorHandler);
 
 const port = process.env.PORT || 5000;
+
+console.log(`[api] starting from ${process.cwd()} using ${ENV_FILE}`);
 
 connectDB()
   .then(() => ensureOwners())
