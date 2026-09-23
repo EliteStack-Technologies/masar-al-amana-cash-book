@@ -7,15 +7,29 @@ export const login = asyncHandler(async (req, res) => {
   const password = String(req.body.password || '');
 
   if (!email || !password) {
+    console.warn(`[auth] login rejected: missing ${!email ? 'email' : 'password'}`);
     return res.status(400).json({ message: 'Email and password are required' });
   }
 
+  console.log(`[auth] login attempt ${email} (password length ${password.length})`);
+
   const user = await User.findOne({ email });
-  // Same message either way so the form never reveals which emails exist.
-  if (!user || !(await user.verifyPassword(password))) {
+  // Same message either way so the form never reveals which emails exist;
+  // the server log says which one it was.
+  if (!user) {
+    console.warn(`[auth] login failed ${email}: no such user`);
+    return res.status(401).json({ message: 'Incorrect email or password' });
+  }
+  if (!user.passwordHash) {
+    console.warn(`[auth] login failed ${email}: user has no password set (run npm run seed)`);
+    return res.status(401).json({ message: 'Incorrect email or password' });
+  }
+  if (!(await user.verifyPassword(password))) {
+    console.warn(`[auth] login failed ${email}: wrong password`);
     return res.status(401).json({ message: 'Incorrect email or password' });
   }
 
+  console.log(`[auth] login ok ${email}`);
   res.cookie(COOKIE_NAME, signToken(user._id), cookieOptions());
   res.json({ user: user.toSafeJSON() });
 });
