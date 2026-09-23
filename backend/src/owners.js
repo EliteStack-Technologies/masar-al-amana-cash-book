@@ -1,53 +1,44 @@
 import User from './models/User.js';
 
-/**
- * The two shop-owner logins. backend/.env can override any of these; the
- * fallbacks are the shop's default accounts.
- */
-export function ownerAccounts() {
-  return [
-    {
-      name: process.env.OWNER1_NAME || 'Shop Owner 1',
-      email: process.env.OWNER1_EMAIL || 'owner1@masaralamana.ae',
-      password: process.env.OWNER1_PASSWORD || '123456',
-    },
-    {
-      name: process.env.OWNER2_NAME || 'Shop Owner 2',
-      email: process.env.OWNER2_EMAIL || 'owner2@masaralamana.ae',
-      password: process.env.OWNER2_PASSWORD || '123456',
-    },
-  ];
-}
+/** The shop's only two logins. The API makes sure they exist on every start. */
+export const OWNER_ACCOUNTS = [
+  { name: 'Shop Owner 1', email: 'owner1@masaralamana.ae', password: '123456' },
+  { name: 'Shop Owner 2', email: 'owner2@masaralamana.ae', password: '123456' },
+];
 
 /**
- * Creates any owner login that does not exist yet. With `resetPasswords`,
- * existing logins also get their name and password reset to the configured
- * ones (what `npm run seed` does); without it they are left alone, so a
- * password changed in the app survives a restart or deploy.
+ * Bump this to force both passwords back to the ones above on the next start
+ * or deploy. Until it changes, a password changed in the app is kept.
+ */
+export const OWNER_SEED_VERSION = 1;
+
+/**
+ * Makes the database hold exactly the two owner logins: removes any other
+ * user, creates a missing owner, and resets an owner's password once per
+ * OWNER_SEED_VERSION. With `resetPasswords`, resets them regardless.
  */
 export async function ensureOwners({ resetPasswords = false, log = console.log } = {}) {
-  const accounts = ownerAccounts();
-  log(`[owners] configured: ${accounts.map((a) => a.email.toLowerCase().trim()).join(', ')}`);
+  const emails = OWNER_ACCOUNTS.map((a) => a.email);
+  log(`[owners] configured: ${emails.join(', ')}`);
 
-  for (const acc of accounts) {
-    const email = acc.email.toLowerCase().trim();
-    const user = await User.findOne({ email });
+  const removed = await User.deleteMany({ email: { $nin: emails } });
+  if (removed.deletedCount) log(`[owners] removed ${removed.deletedCount} other user(s)`);
+
+  for (const acc of OWNER_ACCOUNTS) {
+    const user = await User.findOne({ email: acc.email });
 
     if (!user) {
-      const created = new User({ name: acc.name, email });
+      const created = new User({ name: acc.name, email: acc.email, seedVersion: OWNER_SEED_VERSION });
       await created.setPassword(acc.password);
       await created.save();
-      log(`[owners] created ${email}`);
-    } else if (resetPasswords) {
-      user.name = acc.name;
+      log(`[owners] created ${acc.email}`);
+    } else if (resetPasswords || user.seedVersion !== OWNER_SEED_VERSION) {
       await user.setPassword(acc.password);
+      user.seedVersion = OWNER_SEED_VERSION;
       await user.save();
-      log(`[owners] updated password for ${email}`);
+      log(`[owners] reset password for ${acc.email}`);
     } else {
-      log(`[owners] ${email} already exists - password left unchanged`);
+      log(`[owners] ${acc.email} already set up - password left unchanged`);
     }
   }
-
-  const users = await User.find({}, { email: 1 }).lean();
-  log(`[owners] users in database (${users.length}): ${users.map((u) => u.email).join(', ')}`);
 }

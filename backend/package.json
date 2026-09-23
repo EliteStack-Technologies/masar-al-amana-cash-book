@@ -8,7 +8,6 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
-    "reset-users": "node src/resetUsers.js",
     "recalc": "node src/recalc.js"
   },
   "dependencies": {
