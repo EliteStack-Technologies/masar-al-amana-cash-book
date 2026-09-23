@@ -75,8 +75,8 @@ transactions. They are set in code, in `backend/src/owners.js`:
 
 | Email                    | Password |
 | ------------------------ | -------- |
-| owner1@masaralamana.ae   | 123456   |
-| owner2@masaralamana.ae   | 123456   |
+| rinash@masaralamana.ae   | pass@1121 |
+| mujeeb@masaralamana.ae   | pass@1122 |
 
 Every time the API starts (so on every deploy) it makes sure these are the
 only two users: it removes any other user and creates a missing owner.
