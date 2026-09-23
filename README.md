@@ -46,11 +46,8 @@ You need **MongoDB running locally** on `mongodb://127.0.0.1:27017`.
 # 1. install (once)
 npm run install:all
 
-# 2. (optional) the API creates the two owner logins on first start;
-#    `npm run seed` resets their passwords to the ones in backend/.env
-npm run seed
-
-# 3. start both servers — in two terminals
+# 2. start both servers — in two terminals
+#    (the API creates the two owner logins itself on start)
 npm run dev:api     # http://localhost:5000/api
 npm run dev:web     # http://localhost:3000
 ```
@@ -74,20 +71,18 @@ npm run start:web
 ## The two logins
 
 Both accounts are logins for the **same shop** — they see and edit the same
-transactions. Credentials live in `backend/.env`:
+transactions. They are set in code, in `backend/src/owners.js`:
 
-```
-OWNER1_EMAIL=owner1@masaralamana.ae
-OWNER1_PASSWORD=123456
+| Email                    | Password |
+| ------------------------ | -------- |
+| owner1@masaralamana.ae   | 123456   |
+| owner2@masaralamana.ae   | 123456   |
 
-OWNER2_EMAIL=owner2@masaralamana.ae
-OWNER2_PASSWORD=123456
-```
-
-The API creates these logins automatically when it starts (including on
-every deploy) if they do not exist yet; it never resets an existing password.
-Change those values and re-run `npm run seed` to update them, or change a
-password from inside the app under **Profile → Change password**.
+Every time the API starts (so on every deploy) it makes sure these are the
+only two users: it removes any other user and creates a missing owner.
+A password changed in the app under **Profile → Change password** is kept.
+To force both passwords back to the ones in `owners.js`, bump
+`OWNER_SEED_VERSION` there and deploy, or run `npm run seed` on the server.
 
 ---
 
