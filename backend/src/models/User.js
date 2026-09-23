@@ -14,7 +14,7 @@ const userSchema = new mongoose.Schema(
     passwordHash: { type: String, required: true },
     shopName: { type: String, default: 'My Shop', trim: true },
     // Prefills the customer's rate on the new-transaction form.
-    defaultCommissionPercent: { type: Number, default: 3, min: 0, max: 100 },
+    defaultCommissionPercent: { type: Number, default: 2.9, min: 0, max: 100 },
   },
   { timestamps: true }
 );

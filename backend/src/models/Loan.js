@@ -6,8 +6,11 @@ const loanSchema = new mongoose.Schema(
     shopOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     loanNumber: { type: String, unique: true, index: true },
 
-    // Who put the cash in. Chosen from the customer list; the name is
-    // snapshotted so renaming a customer never rewrites loan history.
+    // Who put the cash in, from the loan accounts list; the name is
+    // snapshotted so renaming an account never rewrites loan history.
+    account: { type: mongoose.Schema.Types.ObjectId, ref: 'LoanAccount', default: null, index: true },
+    // Legacy: loans used to be taken against a swipe customer. Kept so old
+    // rows can be moved onto an account; nothing new is written here.
     customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
     lenderName: { type: String, required: true, trim: true, index: true },
     lenderMobile: { type: String, default: '', trim: true },

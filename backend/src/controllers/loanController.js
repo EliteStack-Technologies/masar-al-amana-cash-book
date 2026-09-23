@@ -1,40 +1,67 @@
 import Loan from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
-import Customer from '../models/Customer.js';
+import LoanAccount from '../models/LoanAccount.js';
 import { asyncHandler } from '../middleware/error.js';
 import { round2 } from '../utils/calc.js';
 
-const EDITABLE = ['customer', 'lenderName', 'lenderMobile', 'principal', 'entryDate', 'notes'];
+const EDITABLE = ['account', 'lenderName', 'lenderMobile', 'principal', 'entryDate', 'notes'];
+
+/** Case-insensitive exact name match, so "rashid" finds "Rashid". */
+const findAccountByName = (ownerId, name) =>
+  LoanAccount.findOne({ shopOwner: ownerId, name }).collation({ locale: 'en', strength: 2 });
 
 /**
- * A loan is cash a customer put into the shop, so the lender is picked from
- * the customer list. A name with no match creates the customer on the spot -
- * the add-loan screen asks for nothing else.
+ * A loan is cash an account holder put into the shop, so the lender is picked
+ * from the loan accounts list. A name with no match opens a new account on
+ * the spot - the add-loan screen asks for nothing else.
  */
-async function resolveLender(body, ownerId) {
-  if (body.customer) {
-    const customer = await Customer.findOne({ _id: body.customer, shopOwner: ownerId });
-    if (!customer) throw Object.assign(new Error('Customer not found'), { status: 404 });
-    return customer;
+async function resolveAccount(body, ownerId) {
+  if (body.account) {
+    const account = await LoanAccount.findOne({ _id: body.account, shopOwner: ownerId });
+    if (!account) throw Object.assign(new Error('Account not found'), { status: 404 });
+    return account;
   }
 
   const name = String(body.lenderName || '').trim();
-  if (!name) throw Object.assign(new Error('Choose a customer or type a name'), { status: 400 });
+  if (!name) throw Object.assign(new Error('Choose an account or type a name'), { status: 400 });
 
-  // Case-insensitive exact match, so "rashid" finds "Rashid".
-  const existing = await Customer.findOne({ shopOwner: ownerId, name }).collation({
-    locale: 'en',
-    strength: 2,
-  });
+  const existing = await findAccountByName(ownerId, name);
   if (existing) return existing;
 
-  return Customer.create({
+  return LoanAccount.create({
     shopOwner: ownerId,
     name,
     mobile: String(body.lenderMobile || '').trim(),
     createdBy: ownerId,
   });
 }
+
+/**
+ * Loans written before accounts existed point at a swipe customer instead.
+ * Each is moved onto an account of the same name (opened if needed), once;
+ * after that every loan has an account and this finds nothing to do.
+ */
+async function adoptLegacyLoans(ownerId) {
+  const legacy = await Loan.find({ shopOwner: ownerId, account: null }).sort({ entryDate: 1 });
+  for (const loan of legacy) {
+    const account = await resolveAccount(
+      { lenderName: loan.lenderName, lenderMobile: loan.lenderMobile },
+      ownerId
+    );
+    loan.account = account._id;
+    await loan.save();
+  }
+}
+
+/** The loan accounts list, for the add-loan picker. */
+export const listAccounts = asyncHandler(async (req, res) => {
+  await adoptLegacyLoans(req.user._id);
+  const items = await LoanAccount.find({ shopOwner: req.user._id })
+    .collation({ locale: 'en', strength: 2 })
+    .sort({ name: 1 })
+    .lean();
+  res.json({ items });
+});
 
 export function buildFilter(query, ownerId) {
   const filter = { shopOwner: ownerId };
@@ -70,9 +97,10 @@ async function refreshLoan(loan) {
 export const listLoans = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+  await adoptLegacyLoans(req.user._id);
   const filter = buildFilter(req.query, req.user._id);
 
-  const [items, total, totals, byCustomer] = await Promise.all([
+  const [items, total, totals, byAccount] = await Promise.all([
     Loan.find(filter).sort({ entryDate: -1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Loan.countDocuments(filter),
     Loan.aggregate([
@@ -85,12 +113,14 @@ export const listLoans = asyncHandler(async (req, res) => {
         },
       },
     ]),
-    // Customer-wise position, so the loan screen can be read per lender.
+    // Account-wise position, so the loan screen can be read per lender.
     Loan.aggregate([
       { $match: { shopOwner: req.user._id } },
+      { $sort: { entryDate: 1 } },
       {
         $group: {
-          _id: { customer: '$customer', name: '$lenderName' },
+          _id: '$account',
+          name: { $last: '$lenderName' },
           taken: { $sum: '$principal' },
           repaid: { $sum: '$settledAmount' },
           loans: { $sum: 1 },
@@ -111,9 +141,9 @@ export const listLoans = asyncHandler(async (req, res) => {
     total,
     pages: Math.ceil(total / limit) || 1,
     totals: { taken, settled, outstanding: round2(Math.max(0, taken - settled)) },
-    byCustomer: byCustomer.map((r) => ({
-      customerId: r._id.customer,
-      name: r._id.name,
+    byAccount: byAccount.map((r) => ({
+      accountId: r._id,
+      name: r.name,
       taken: round2(r.taken),
       repaid: round2(r.repaid),
       outstanding: round2(Math.max(0, r.taken - r.repaid)),
@@ -121,6 +151,75 @@ export const listLoans = asyncHandler(async (req, res) => {
       openLoans: r.openLoans,
       lastAt: r.lastAt,
     })),
+  });
+});
+
+/**
+ * Everything the shop holds on one lender: every loan they have put in, the
+ * repayments under each, and the combined position. This is what the loans
+ * screen opens when an account row is tapped.
+ */
+export const accountLoans = asyncHandler(async (req, res) => {
+  const account = await LoanAccount.findOne({
+    _id: req.params.accountId,
+    shopOwner: req.user._id,
+  }).lean();
+  if (!account) return res.status(404).json({ message: 'Account not found' });
+
+  const loans = await Loan.find({ shopOwner: req.user._id, account: account._id })
+    .sort({ entryDate: -1, createdAt: -1 })
+    .lean();
+
+  const settlements = await LoanSettlement.find({
+    shopOwner: req.user._id,
+    loan: { $in: loans.map((l) => l._id) },
+  })
+    .sort({ entryDate: -1, createdAt: -1 })
+    .lean();
+
+  // Hang each repayment under its own loan, keeping the sort above.
+  const byLoan = new Map();
+  settlements.forEach((s) => {
+    const key = String(s.loan);
+    if (!byLoan.has(key)) byLoan.set(key, []);
+    byLoan.get(key).push(s);
+  });
+
+  const rows = loans.map((l) => ({
+    ...l,
+    outstanding: round2(Math.max(0, l.principal - l.settledAmount)),
+    settlements: byLoan.get(String(l._id)) || [],
+  }));
+
+  const taken = round2(rows.reduce((a, l) => a + l.principal, 0));
+  const repaid = round2(rows.reduce((a, l) => a + l.settledAmount, 0));
+  const dates = rows.map((l) => new Date(l.entryDate).getTime()).filter(Boolean);
+
+  res.json({
+    account: {
+      _id: account._id,
+      accountNumber: account.accountNumber,
+      name: account.name,
+      mobile: account.mobile || '',
+      notes: account.notes || '',
+    },
+    loans: rows,
+    // Flat timeline across every loan, newest first.
+    settlements: settlements.map((s) => ({
+      ...s,
+      loanNumber: loans.find((l) => String(l._id) === String(s.loan))?.loanNumber || '',
+    })),
+    totals: {
+      taken,
+      repaid,
+      outstanding: round2(Math.max(0, taken - repaid)),
+      loans: rows.length,
+      openLoans: rows.filter((l) => l.status === 'open').length,
+      closedLoans: rows.filter((l) => l.status === 'closed').length,
+      repayments: settlements.length,
+      firstAt: dates.length ? new Date(Math.min(...dates)) : null,
+      lastAt: dates.length ? new Date(Math.max(...dates)) : null,
+    },
   });
 });
 
@@ -141,14 +240,14 @@ export const createLoan = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Loan amount must be greater than 0' });
   }
 
-  const lender = await resolveLender(body, req.user._id);
+  const account = await resolveAccount(body, req.user._id);
 
   const payload = { shopOwner: req.user._id, createdBy: req.user._id };
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
-  // Snapshot the lender so renaming the customer never rewrites history.
-  payload.customer = lender._id;
-  payload.lenderName = lender.name;
-  payload.lenderMobile = lender.mobile || '';
+  // Snapshot the account so renaming it never rewrites history.
+  payload.account = account._id;
+  payload.lenderName = account.name;
+  payload.lenderMobile = account.mobile || '';
 
   const loan = await Loan.create(payload);
   res.status(201).json({ loan: loan.toJSON() });
@@ -159,11 +258,11 @@ export const updateLoan = asyncHandler(async (req, res) => {
   if (!loan) return res.status(404).json({ message: 'Loan not found' });
 
   for (const key of EDITABLE) if (req.body[key] !== undefined) loan[key] = req.body[key];
-  if (req.body.customer !== undefined || req.body.lenderName !== undefined) {
-    const lender = await resolveLender({ ...req.body, lenderName: loan.lenderName }, req.user._id);
-    loan.customer = lender._id;
-    loan.lenderName = lender.name;
-    loan.lenderMobile = lender.mobile || '';
+  if (req.body.account !== undefined || req.body.lenderName !== undefined) {
+    const account = await resolveAccount({ ...req.body, lenderName: loan.lenderName }, req.user._id);
+    loan.account = account._id;
+    loan.lenderName = account.name;
+    loan.lenderMobile = account.mobile || '';
   }
   loan.updatedBy = req.user._id;
   // Principal may have changed, so re-evaluate open/closed.

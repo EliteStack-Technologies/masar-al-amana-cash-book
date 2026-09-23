@@ -9,7 +9,7 @@ const customerSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, index: true },
     mobile: { type: String, default: '', trim: true, index: true },
     // Per-customer rate that pre-fills the New Transaction screen.
-    commissionPercent: { type: Number, default: 3, min: 0, max: 100 },
+    commissionPercent: { type: Number, default: 2.9, min: 0, max: 100 },
     // The machine this customer usually swipes on (optional).
     machine: { type: mongoose.Schema.Types.ObjectId, ref: 'CardMachine', default: null, index: true },
 

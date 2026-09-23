@@ -4,6 +4,8 @@ import Transaction from '../models/Transaction.js';
 import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
 import Loan from '../models/Loan.js';
+import LoanSettlement from '../models/LoanSettlement.js';
+import LoanAccount from '../models/LoanAccount.js';
 import Customer from '../models/Customer.js';
 import CardMachine from '../models/CardMachine.js';
 import { asyncHandler } from '../middleware/error.js';
@@ -31,21 +33,68 @@ const fmtDay = (d) =>
 /* --- Column definitions per dataset. `money: true` marks amount columns. --- */
 const TXN_COLUMNS = [
   { header: 'Txn No', key: 'txnNumber', width: 14, pdf: 60 },
-  { header: 'Date', key: 'date', width: 18, pdf: 80 },
-  { header: 'Customer', key: 'customerName', width: 18, pdf: 74 },
-  { header: 'Mobile', key: 'customerMobile', width: 14, pdf: 62 },
-  { header: 'Swiped', key: 'swipedAmount', width: 12, pdf: 52, money: true },
-  { header: 'Given', key: 'givenAmount', width: 12, pdf: 52, money: true },
+  { header: 'Date', key: 'date', width: 20, pdf: 104 },
+  { header: 'Customer', key: 'customerName', width: 18, pdf: 60 },
+  { header: 'Mobile', key: 'customerMobile', width: 14, pdf: 54 },
+  { header: 'Swiped', key: 'swipedAmount', width: 12, pdf: 48, money: true },
+  { header: 'Given', key: 'givenAmount', width: 12, pdf: 48, money: true },
   { header: 'Charge', key: 'chargeToCustomer', width: 11, pdf: 46, money: true },
-  { header: 'Cust %', key: 'custPercent', width: 8, pdf: 36 },
-  { header: 'Comm', key: 'commissionType', width: 10, pdf: 42 },
-  { header: 'Supp %', key: 'supplierPercent', width: 8, pdf: 36 },
-  { header: 'Supplier Fee', key: 'supplierFee', width: 12, pdf: 50, money: true },
+  { header: 'Cust %', key: 'custPercent', width: 8, pdf: 40 },
+  { header: 'Comm', key: 'commissionType', width: 10, pdf: 40 },
+  { header: 'Supp %', key: 'supplierPercent', width: 8, pdf: 40 },
+  { header: 'Supplier Fee', key: 'supplierFee', width: 12, pdf: 56, money: true },
   { header: 'Margin', key: 'margin', width: 11, pdf: 46, money: true },
-  { header: 'Supplier A/C', key: 'supplierAccount', width: 13, pdf: 54, money: true },
+  { header: 'Supplier A/C', key: 'supplierAccount', width: 13, pdf: 60, money: true },
   { header: 'Settlement', key: 'settlement', width: 13, pdf: 54 },
   { header: 'Profit', key: 'profitShown', width: 11, pdf: 46 },
-  { header: 'Status', key: 'settlementStatus', width: 11, pdf: 46 },
+  { header: 'Status', key: 'settlementStatus', width: 11, pdf: 40 },
+];
+
+/**
+ * The sheet shared with the card company: same swipe list, minus the
+ * customer's mobile number and our supplier percentage.
+ */
+const TXN_COMPANY_COLUMNS = TXN_COLUMNS.filter(
+  (c) => c.key !== 'customerMobile' && c.key !== 'supplierPercent'
+);
+
+/**
+ * The card company copy of the daily, weekly and monthly reports: just who
+ * swiped, how much, the card charge, and what the card company owes for it.
+ * The full copy of those reports keeps every column.
+ */
+const PERIOD_COLUMNS = [
+  { header: 'Txn No', key: 'txnNumber', width: 14, pdf: 90 },
+  { header: 'Date', key: 'date', width: 20, pdf: 150 },
+  { header: 'Customer', key: 'customerName', width: 24, pdf: 200 },
+  { header: 'Swipe', key: 'swipedAmount', width: 14, pdf: 110, money: true },
+  { header: 'Card Charge', key: 'chargeToCustomer', width: 14, pdf: 100, money: true },
+  { header: 'Due Amount (Supplier A/C)', key: 'supplierAccount', width: 24, pdf: 130, money: true },
+];
+
+/**
+ * The full (own records) copy of the daily, weekly and monthly reports:
+ * every swipe column except the settlement side - no settlement, profit or
+ * status.
+ */
+const SETTLEMENT_KEYS = ['settlement', 'profitShown', 'settlementStatus'];
+const PERIOD_FULL_COLUMNS = TXN_COLUMNS.filter((c) => !SETTLEMENT_KEYS.includes(c.key));
+
+const periodFullSummaryLines = (s) => [
+  ['Total swipes', s.count, false],
+  ['Total swiped', s.swipedAmount, true],
+  ['Total cash given to customers', s.givenAmount, true],
+  ['Total charged to customers', s.chargeToCustomer, true],
+  ['Supplier fee', s.supplierFee, true],
+  ['Margin', s.margin, true],
+  ['Total due (Supplier A/C)', s.supplierAccount, true],
+];
+
+const periodSummaryLines = (s) => [
+  ['Total swipes', s.count, false],
+  ['Total swiped', s.swipedAmount, true],
+  ['Total card charge', s.chargeToCustomer, true],
+  ['Total due (Supplier A/C)', s.supplierAccount, true],
 ];
 
 const txnRow = (t) => ({
@@ -77,13 +126,24 @@ const EXPENSE_COLUMNS = [
 
 const LOAN_COLUMNS = [
   { header: 'No', key: 'loanNumber', width: 12, pdf: 66 },
-  { header: 'Lender', key: 'lenderName', width: 20, pdf: 110 },
+  { header: 'Account', key: 'lenderName', width: 20, pdf: 110 },
   { header: 'Mobile', key: 'lenderMobile', width: 14, pdf: 80 },
   { header: 'Date', key: 'date', width: 16, pdf: 84 },
   { header: 'Loan Taken', key: 'principal', width: 13, pdf: 74, money: true },
   { header: 'Repaid', key: 'settledAmount', width: 13, pdf: 74, money: true },
   { header: 'Outstanding', key: 'outstanding', width: 13, pdf: 74, money: true },
   { header: 'Status', key: 'status', width: 10, pdf: 54 },
+];
+
+const ACCOUNT_LOAN_COLUMNS = [
+  { header: 'Loan No', key: 'loanNumber', width: 14, pdf: 80 },
+  { header: 'Date', key: 'date', width: 16, pdf: 90 },
+  { header: 'Loan Taken', key: 'principal', width: 14, pdf: 84, money: true },
+  { header: 'Repaid', key: 'settledAmount', width: 14, pdf: 84, money: true },
+  { header: 'Outstanding', key: 'outstanding', width: 14, pdf: 84, money: true },
+  { header: 'Repayments', key: 'repayments', width: 12, pdf: 70 },
+  { header: 'Status', key: 'status', width: 10, pdf: 60 },
+  { header: 'Notes', key: 'notes', width: 26, pdf: 150 },
 ];
 
 const CUSTOMER_COLUMNS = [
@@ -115,6 +175,10 @@ const CUST_REPORT_COLUMNS = [
   { header: 'Profit', key: 'profit', width: 14, pdf: 76, money: true },
 ];
 
+const CUST_REPORT_COMPANY_COLUMNS = CUST_REPORT_COLUMNS.filter(
+  (c) => c.key !== 'customerMobile'
+);
+
 const MACHINE_REPORT_COLUMNS = [
   { header: 'Machine', key: 'machineName', width: 20, pdf: 140 },
   { header: 'Card Company', key: 'cardCompany', width: 18, pdf: 120 },
@@ -145,6 +209,16 @@ const txnSummaryLines = (s) => [
  */
 async function gatherReport(query, ownerId) {
   const type = query.type || 'transactions';
+  // ?variant=company is the copy handed to the card company: no customer
+  // mobile numbers, no supplier percentage.
+  const company = query.variant === 'company';
+  const txnColumns = company ? TXN_COMPANY_COLUMNS : TXN_COLUMNS;
+  // Daily, weekly and monthly: the full copy is every column bar the
+  // settlement side, the card company copy is the short six-column list.
+  const periodColumns = company ? PERIOD_COLUMNS : PERIOD_FULL_COLUMNS;
+  const periodSummary = company ? periodSummaryLines : periodFullSummaryLines;
+  const mark = company ? ' (Card Company Copy)' : '';
+  const tag = company ? '-card-company' : '';
 
   if (type === 'daily') {
     const date = query.date || todayStr();
@@ -152,9 +226,9 @@ async function gatherReport(query, ownerId) {
     const rows = await Transaction.find({ shopOwner: ownerId, txnDate: { $gte: r.from, $lt: r.to } })
       .sort({ txnDate: 1 }).lean();
     return {
-      title: 'Daily Report - ' + date, fileBase: 'daily-' + date,
-      columns: TXN_COLUMNS, rows: rows.map(txnRow),
-      summaryLines: txnSummaryLines(await summarise(ownerId, r)),
+      title: 'Daily Report - ' + date + mark, fileBase: 'daily-' + date + tag,
+      columns: periodColumns, rows: rows.map(txnRow),
+      summaryLines: periodSummary(await summarise(ownerId, r)),
     };
   }
 
@@ -164,9 +238,9 @@ async function gatherReport(query, ownerId) {
     const rows = await Transaction.find({ shopOwner: ownerId, txnDate: { $gte: r.from, $lt: r.to } })
       .sort({ txnDate: 1 }).lean();
     return {
-      title: `Weekly Report - ${r.start} to ${r.end}`, fileBase: 'weekly-' + r.start,
-      columns: TXN_COLUMNS, rows: rows.map(txnRow),
-      summaryLines: txnSummaryLines(await summarise(ownerId, r)),
+      title: `Weekly Report - ${r.start} to ${r.end}` + mark, fileBase: 'weekly-' + r.start + tag,
+      columns: periodColumns, rows: rows.map(txnRow),
+      summaryLines: periodSummary(await summarise(ownerId, r)),
     };
   }
 
@@ -176,10 +250,15 @@ async function gatherReport(query, ownerId) {
     const rows = await Transaction.find({ shopOwner: ownerId, txnDate: { $gte: r.from, $lt: r.to } })
       .sort({ txnDate: 1 }).lean();
     return {
-      title: (type === 'commission' ? 'Commission' : 'Monthly') + ' Report - ' + month,
-      fileBase: type + '-' + month,
-      columns: TXN_COLUMNS, rows: rows.map(txnRow),
-      summaryLines: txnSummaryLines(await summarise(ownerId, r)),
+      title: (type === 'commission' ? 'Commission' : 'Monthly') + ' Report - ' + month + mark,
+      fileBase: type + '-' + month + tag,
+      // The commission report keeps the full sheet; the monthly one is the
+      // short swipe list, like daily and weekly.
+      columns: type === 'monthly' ? periodColumns : txnColumns,
+      rows: rows.map(txnRow),
+      summaryLines: (type === 'monthly' ? periodSummary : txnSummaryLines)(
+        await summarise(ownerId, r)
+      ),
     };
   }
 
@@ -187,8 +266,8 @@ async function gatherReport(query, ownerId) {
     const rows = await Transaction.find({ shopOwner: ownerId, settlementStatus: 'pending' })
       .sort({ txnDate: 1 }).lean();
     return {
-      title: 'Pending Settlements', fileBase: 'pending-settlements-' + todayStr(),
-      columns: TXN_COLUMNS, rows: rows.map(txnRow),
+      title: 'Pending Settlements' + mark, fileBase: 'pending-settlements-' + todayStr() + tag,
+      columns: txnColumns, rows: rows.map(txnRow),
       summaryLines: txnSummaryLines(await summarise(ownerId, null)),
     };
   }
@@ -233,6 +312,47 @@ async function gatherReport(query, ownerId) {
     };
   }
 
+  // One account's whole loan history, as opened from the loans screen.
+  if (type === 'account-loans') {
+    const account = await LoanAccount.findOne({ _id: query.accountId, shopOwner: ownerId }).lean();
+    if (!account) throw Object.assign(new Error('Account not found'), { status: 404 });
+
+    const loans = await Loan.find({ shopOwner: ownerId, account: account._id })
+      .sort({ entryDate: -1, createdAt: -1 }).lean();
+
+    const counts = await LoanSettlement.aggregate([
+      { $match: { loan: { $in: loans.map((l) => l._id) } } },
+      { $group: { _id: '$loan', n: { $sum: 1 } } },
+    ]);
+    const byLoan = new Map(counts.map((c) => [String(c._id), c.n]));
+
+    const taken = loans.reduce((a, l) => a + l.principal, 0);
+    const repaid = loans.reduce((a, l) => a + l.settledAmount, 0);
+
+    return {
+      title: 'Loans - ' + account.name,
+      fileBase: 'loans-' + account.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + todayStr(),
+      columns: ACCOUNT_LOAN_COLUMNS,
+      rows: loans.map((l) => ({
+        ...l,
+        date: fmtDay(l.entryDate),
+        outstanding: Math.max(0, Math.round((l.principal - l.settledAmount) * 100) / 100),
+        repayments: byLoan.get(String(l._id)) || 0,
+      })),
+      summaryLines: [
+        ['Account', account.name, false],
+        ['Account no', account.accountNumber, false],
+        ['Mobile', account.mobile || '-', false],
+        ['Loans', loans.length, false],
+        ['Open loans', loans.filter((l) => l.status === 'open').length, false],
+        ['Closed loans', loans.filter((l) => l.status === 'closed').length, false],
+        ['Total put in', taken, true],
+        ['Total repaid', repaid, true],
+        ['Still owed', Math.max(0, taken - repaid), true],
+      ],
+    };
+  }
+
   if (type === 'customers') {
     const rows = await Customer.find({ shopOwner: ownerId }).populate('machine', 'name').sort({ name: 1 }).lean();
     return {
@@ -255,9 +375,10 @@ async function gatherReport(query, ownerId) {
   if (type === 'customer-report') {
     const data = await runReport(customerReport, ownerId, query);
     return {
-      title: 'Customer Report' + (query.month ? ' - ' + query.month : ''),
-      fileBase: 'customer-report-' + (query.month || todayStr()),
-      columns: CUST_REPORT_COLUMNS, rows: data.customers,
+      title: 'Customer Report' + (query.month ? ' - ' + query.month : '') + mark,
+      fileBase: 'customer-report-' + (query.month || todayStr()) + tag,
+      columns: company ? CUST_REPORT_COMPANY_COLUMNS : CUST_REPORT_COLUMNS,
+      rows: data.customers,
       summaryLines: txnSummaryLines(data.summary),
     };
   }
@@ -265,8 +386,8 @@ async function gatherReport(query, ownerId) {
   if (type === 'machine-report') {
     const data = await runReport(machineReport, ownerId, query);
     return {
-      title: 'Machine Report' + (query.month ? ' - ' + query.month : ''),
-      fileBase: 'machine-report-' + (query.month || todayStr()),
+      title: 'Machine Report' + (query.month ? ' - ' + query.month : '') + mark,
+      fileBase: 'machine-report-' + (query.month || todayStr()) + tag,
       columns: MACHINE_REPORT_COLUMNS, rows: data.machines,
       summaryLines: txnSummaryLines(data.summary),
     };
@@ -275,8 +396,8 @@ async function gatherReport(query, ownerId) {
   // Default: whatever the Transactions screen is currently filtered to.
   const rows = await Transaction.find(buildFilter(query, ownerId)).sort({ txnDate: -1 }).lean();
   return {
-    title: 'Transactions', fileBase: 'transactions-' + todayStr(),
-    columns: TXN_COLUMNS, rows: rows.map(txnRow),
+    title: 'Transactions' + mark, fileBase: 'transactions-' + todayStr() + tag,
+    columns: txnColumns, rows: rows.map(txnRow),
     summaryLines: txnSummaryLines(await summarise(ownerId, null)),
   };
 }
@@ -359,7 +480,25 @@ export const exportPdf = asyncHandler(async (req, res) => {
   doc.moveDown(0.9);
 
   const startX = doc.page.margins.left;
-  const tableWidth = columns.reduce((a, c) => a + (c.pdf || 60), 0);
+  // The table always spans the page: the columns' pdf widths are relative,
+  // stretched (or squeezed) to the printable width.
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const scale = pageWidth / columns.reduce((a, c) => a + (c.pdf || 60), 0);
+  const colWidth = (c) => (c.pdf || 60) * scale;
+  const tableWidth = pageWidth;
+
+  // PDFKit wraps at spaces whenever it is given a width, even with lineBreak
+  // off, which spills a long cell into the row below. Trim to fit instead.
+  const fit = (text, width) => {
+    let str = String(text);
+    if (doc.widthOfString(str) <= width) return str;
+    while (str.length > 1 && doc.widthOfString(str + '…') > width) str = str.slice(0, -1);
+    return str.trimEnd() + '…';
+  };
+  const cell = (text, x, y, c) => {
+    const w = colWidth(c) - 6;
+    doc.text(fit(text, w), x + 3, y, { lineBreak: false });
+  };
 
   const drawHeader = () => {
     const y = doc.y;
@@ -367,8 +506,8 @@ export const exportPdf = asyncHandler(async (req, res) => {
     doc.fillColor('#ffffff').fontSize(8);
     let x = startX;
     columns.forEach((c) => {
-      doc.text(c.header, x + 3, y + 2, { width: (c.pdf || 60) - 6, ellipsis: true, lineBreak: false });
-      x += c.pdf || 60;
+      cell(c.header, x, y + 2, c);
+      x += colWidth(c);
     });
     doc.y = y + 18;
     doc.fillColor('#334155');
@@ -391,8 +530,8 @@ export const exportPdf = asyncHandler(async (req, res) => {
       let v = r[c.key];
       if (c.money) v = Number(v || 0).toFixed(2);
       else if (v === undefined || v === null || v === '') v = '-';
-      doc.text(String(v), x + 3, y, { width: (c.pdf || 60) - 6, ellipsis: true, lineBreak: false });
-      x += c.pdf || 60;
+      cell(v, x, y, c);
+      x += colWidth(c);
     });
     doc.y = y + 14;
   });

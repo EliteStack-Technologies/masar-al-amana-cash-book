@@ -5,6 +5,7 @@ import Loan from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
 import CardMachine from '../models/CardMachine.js';
 import Settlement from '../models/Settlement.js';
+import OpeningBalance from '../models/OpeningBalance.js';
 import { asyncHandler } from '../middleware/error.js';
 import { dayRange, weekRange, monthRange, todayStr, TZ } from '../utils/dates.js';
 import { round2 } from '../utils/calc.js';
@@ -117,24 +118,26 @@ async function loanActivity(ownerId, range) {
 }
 
 /**
- * Cash actually in the drawer, all time: the loan float that came in, less
- * what has been repaid and handed to customers, plus what the card company
- * and other income have paid back.
+ * Cash actually in the drawer, all time: the opening balance and the loan
+ * float that came in, less what has been repaid and handed to customers, plus
+ * what the card company and other income have paid back.
  */
 export async function cashPosition(ownerId) {
-  const [txns, loans, repaid, income, expense] = await Promise.all([
+  const [txns, loans, repaid, income, expense, opening] = await Promise.all([
     summarise(ownerId, null),
     moneySum(Loan, ownerId, null, 'principal'),
     moneySum(LoanSettlement, ownerId, null),
     moneySum(Income, ownerId, null),
     moneySum(Expense, ownerId, null),
+    moneySum(OpeningBalance, ownerId, null),
   ]);
 
   return {
     inHand: round2(
-      loans.amount - repaid.amount - txns.givenAmount + txns.receivedAmount +
+      opening.amount + loans.amount - repaid.amount - txns.givenAmount + txns.receivedAmount +
         income.amount - expense.amount
     ),
+    opening: opening.amount,
     loanTaken: loans.amount,
     loanRepaid: repaid.amount,
     givenOut: txns.givenAmount,

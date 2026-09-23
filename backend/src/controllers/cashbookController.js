@@ -3,13 +3,14 @@ import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
 import Loan from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
+import OpeningBalance from '../models/OpeningBalance.js';
 import { asyncHandler } from '../middleware/error.js';
 import { round2 } from '../utils/calc.js';
 
 /**
- * One ledger for the whole book. Every entry the shop makes - swipes, the
- * settlements that pay them back, loans taken from customers, repayments,
- * income and expenses - lands here as a single cash-in or cash-out line.
+ * One ledger for the whole book. Every entry the shop makes - opening
+ * balances, swipes, the settlements that pay them back, loans taken from
+ * customers, repayments, income and expenses - lands here as a single cash-in or cash-out line.
  *
  * A swipe puts out two separate lines: the cash handed over on the day of the
  * swipe, and the company's payment on the day it actually arrived. That is
@@ -32,7 +33,7 @@ async function collect(ownerId, from, to) {
     return m;
   };
 
-  const [txns, loans, repayments, incomes, expenses] = await Promise.all([
+  const [txns, loans, repayments, incomes, expenses, openings] = await Promise.all([
     // Swipes are pulled on either date, then split into their two lines.
     Transaction.find({
       shopOwner: ownerId,
@@ -47,9 +48,25 @@ async function collect(ownerId, from, to) {
     LoanSettlement.find(rangeMatch('entryDate')).populate('loan', 'loanNumber lenderName').sort({ entryDate: 1 }).lean(),
     Income.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
     Expense.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
+    OpeningBalance.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
   ]);
 
   const rows = [];
+
+  for (const o of openings) {
+    rows.push(line({
+      id: String(o._id),
+      date: o.entryDate,
+      kind: 'opening',
+      direction: IN,
+      amount: o.amount,
+      ref: o.openingNumber,
+      title: 'Opening balance',
+      detail: o.notes || '',
+      notes: o.notes || '',
+      link: '',
+    }));
+  }
 
   for (const t of txns) {
     const who = t.customerName || 'Walk-in';

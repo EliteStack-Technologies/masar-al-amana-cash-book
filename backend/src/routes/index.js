@@ -12,6 +12,7 @@ import * as expense from '../controllers/expenseController.js';
 import * as loan from '../controllers/loanController.js';
 import * as settlement from '../controllers/settlementController.js';
 import * as cashbook from '../controllers/cashbookController.js';
+import * as opening from '../controllers/openingBalanceController.js';
 
 const router = Router();
 
@@ -73,6 +74,10 @@ router.delete('/expenses/:id', expense.deleteExpense);
 // --- loans + loan settlements ---
 router.get('/loans', loan.listLoans);
 router.post('/loans', loan.createLoan);
+// Registered before '/loans/:id' so 'accounts' is never read as a loan id.
+router.get('/loans/accounts', loan.listAccounts);
+// Two segments, so this never collides with '/loans/:id'.
+router.get('/loans/account/:accountId', loan.accountLoans);
 router.get('/loans/:id', loan.getLoan);
 router.patch('/loans/:id', loan.updateLoan);
 router.delete('/loans/:id', loan.deleteLoan);
@@ -86,6 +91,10 @@ router.delete('/settlements/day/:id', settlement.revertDay);
 
 // --- cash book (every entry in one ledger) ---
 router.get('/cashbook', cashbook.cashbook);
+router.get('/cashbook/opening', opening.listOpening);
+router.post('/cashbook/opening', opening.createOpening);
+router.patch('/cashbook/opening/:id', opening.updateOpening);
+router.delete('/cashbook/opening/:id', opening.deleteOpening);
 
 // --- reports ---
 router.get('/reports/dashboard', report.dashboard);
