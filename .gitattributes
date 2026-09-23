@@ -1,0 +1,2 @@
+# Scripts run on the Linux droplet; keep them LF even from Windows.
+*.sh text eol=lf

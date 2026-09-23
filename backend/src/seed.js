@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './config/env.js';
 import mongoose from 'mongoose';
 import { connectDB } from './config/db.js';
 import User from './models/User.js';

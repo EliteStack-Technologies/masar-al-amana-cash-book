@@ -1,0 +1,41 @@
+# Deploys to the DigitalOcean droplet whenever `production` changes.
+#
+# Repository SECRETS (Settings -> Secrets and variables -> Actions -> Secrets):
+#   DROPLET_HOST     the droplet's IP address
+#   DROPLET_USER     the Linux user that owns the app folder and runs pm2
+#   DROPLET_SSH_KEY  a private key whose public half is in that user's authorized_keys
+#   DROPLET_PORT     (optional) SSH port, if not 22
+#
+# Repository VARIABLES (same page -> Variables tab), all optional:
+#   APP_DIR          where the repo is cloned on the droplet (default /var/www/cashbook)
+#   WEB_PORT         port for the Next.js site (default 3000) - pick a free one,
+#                    other projects on the droplet may already use 3000
+name: Deploy
+
+on:
+  push:
+    branches: [production]
+  workflow_dispatch:
+
+# Never run two deploys at once; a newer push waits for the current one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          APP_DIR: ${{ vars.APP_DIR || '/var/www/cashbook' }}
+          WEB_PORT: ${{ vars.WEB_PORT || '3000' }}
+        with:
+          host: ${{ secrets.DROPLET_HOST }}
+          username: ${{ secrets.DROPLET_USER }}
+          key: ${{ secrets.DROPLET_SSH_KEY }}
+          port: ${{ secrets.DROPLET_PORT || 22 }}
+          envs: APP_DIR,WEB_PORT
+          command_timeout: 20m
+          script: bash "$APP_DIR/deploy/deploy.sh"
