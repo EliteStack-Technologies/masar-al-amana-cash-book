@@ -11,6 +11,7 @@ import * as income from '../controllers/incomeController.js';
 import * as expense from '../controllers/expenseController.js';
 import * as loan from '../controllers/loanController.js';
 import * as settlement from '../controllers/settlementController.js';
+import * as cashbook from '../controllers/cashbookController.js';
 
 const router = Router();
 
@@ -82,6 +83,9 @@ router.delete('/loans/:id/settlements/:settlementId', loan.deleteSettlement);
 router.get('/settlements/day', settlement.listSettlements);
 router.post('/settlements/day', settlement.settleDay);
 router.delete('/settlements/day/:id', settlement.revertDay);
+
+// --- cash book (every entry in one ledger) ---
+router.get('/cashbook', cashbook.cashbook);
 
 // --- reports ---
 router.get('/reports/dashboard', report.dashboard);

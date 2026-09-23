@@ -7,6 +7,7 @@ export const emptyMachine = () => ({
   name: '',
   deviceId: '',
   cardCompany: '',
+  supplierPercent: '',
   status: 'active',
   notes: '',
 });
@@ -15,6 +16,7 @@ export const toMachineValues = (m) => ({
   name: m.name || '',
   deviceId: m.deviceId || '',
   cardCompany: m.cardCompany || '',
+  supplierPercent: String(m.supplierPercent ?? ''),
   status: m.status || 'active',
   notes: m.notes || '',
 });
@@ -33,7 +35,11 @@ export function MachineForm({ initial, submitLabel, busyLabel, onSubmit, onCance
 
     setBusy(true);
     try {
-      await onSubmit({ ...form, name: form.name.trim() });
+      await onSubmit({
+        ...form,
+        name: form.name.trim(),
+        supplierPercent: Number(form.supplierPercent) || 0,
+      });
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -54,6 +60,36 @@ export function MachineForm({ initial, submitLabel, busyLabel, onSubmit, onCance
           <Field label="Device ID / serial" hint="Optional">
             <input className="field ref" type="text" value={form.deviceId} onChange={set('deviceId')} />
           </Field>
+        </Card>
+      </section>
+
+      <section>
+        <SectionTitle>Supplier rate</SectionTitle>
+        <Card className="space-y-3.5">
+          {/* Set once per machine. Every swipe snapshots it, so changing it
+              here never rewrites entries already in the book. */}
+          <Field
+            label="Supplier %"
+            hint="The card company's cut of every swipe on this machine"
+          >
+            <input
+              className="field ref"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max="100"
+              step="0.01"
+              placeholder="e.g. 1.90"
+              value={form.supplierPercent}
+              onChange={set('supplierPercent')}
+            />
+          </Field>
+          <p className="text-[11.5px] leading-snug muted-2">
+            A swipe of AED 1,000 at {Number(form.supplierPercent) || 0}% means a fee of AED{' '}
+            {((1000 * (Number(form.supplierPercent) || 0)) / 100).toFixed(2)} and AED{' '}
+            {(1000 - (1000 * (Number(form.supplierPercent) || 0)) / 100).toFixed(2)} into your
+            account. Entries already saved keep the rate they were entered at.
+          </p>
         </Card>
       </section>
 

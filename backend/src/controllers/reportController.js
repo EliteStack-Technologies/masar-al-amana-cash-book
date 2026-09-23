@@ -10,24 +10,27 @@ import { dayRange, weekRange, monthRange, todayStr, TZ } from '../utils/dates.js
 import { round2 } from '../utils/calc.js';
 
 const EMPTY = {
-  count: 0, requestedAmount: 0, customerReceived: 0, cardAmount: 0,
-  commissionAmount: 0, ownerCommission: 0, companyCommission: 0,
+  count: 0, swipedAmount: 0, givenAmount: 0, chargeToCustomer: 0,
+  supplierFee: 0, supplierAccount: 0, margin: 0, profit: 0,
   receivedAmount: 0, pendingAmount: 0, receivedCount: 0, pendingCount: 0,
 };
 
 const SUM_STAGE = {
   count: { $sum: 1 },
-  requestedAmount: { $sum: '$requestedAmount' },
-  customerReceived: { $sum: '$customerReceived' },
-  cardAmount: { $sum: '$cardAmount' },
-  commissionAmount: { $sum: '$commissionAmount' },
-  ownerCommission: { $sum: '$ownerCommission' },
-  companyCommission: { $sum: '$companyCommission' },
+  swipedAmount: { $sum: '$swipedAmount' },
+  givenAmount: { $sum: '$givenAmount' },
+  chargeToCustomer: { $sum: '$chargeToCustomer' },
+  supplierFee: { $sum: '$supplierFee' },
+  supplierAccount: { $sum: '$supplierAccount' },
+  margin: { $sum: '$margin' },
+  // Real profit, so it only counts rows whose money has actually landed.
+  profit: { $sum: { $ifNull: ['$profit', 0] } },
   receivedAmount: {
     $sum: { $cond: [{ $eq: ['$settlementStatus', 'received'] }, '$settlementAmount', 0] },
   },
+  // Still sitting with the card company: what it owes, not what it paid.
   pendingAmount: {
-    $sum: { $cond: [{ $eq: ['$settlementStatus', 'pending'] }, '$settlementAmount', 0] },
+    $sum: { $cond: [{ $eq: ['$settlementStatus', 'pending'] }, '$supplierAccount', 0] },
   },
   receivedCount: {
     $sum: { $cond: [{ $eq: ['$settlementStatus', 'received'] }, 1, 0] },
@@ -61,43 +64,43 @@ export async function summarise(ownerId, range) {
   return tidy(row);
 }
 
-/** Amount + count for a simple money model (Income / Expense). */
-export async function moneySum(Model, ownerId, range) {
+/** Amount + count for a simple money model (Income / Expense / Loan). */
+export async function moneySum(Model, ownerId, range, field = 'amount') {
   const match = { shopOwner: ownerId };
   if (range) match.entryDate = { $gte: range.from, $lt: range.to };
   const [row] = await Model.aggregate([
     { $match: match },
-    { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
+    { $group: { _id: null, amount: { $sum: '$' + field }, count: { $sum: 1 } } },
   ]);
   return { amount: round2(row?.amount || 0), count: row?.count || 0 };
 }
 
-/** All-time loan position for an owner: given, repaid, still outstanding. */
+/** All-time loan position: cash taken in, repaid, still owed to lenders. */
 export async function loanTotals(ownerId) {
   const [row] = await Loan.aggregate([
     { $match: { shopOwner: ownerId } },
     {
       $group: {
         _id: null,
-        given: { $sum: '$principal' },
-        settled: { $sum: '$settledAmount' },
+        taken: { $sum: '$principal' },
+        repaid: { $sum: '$settledAmount' },
         count: { $sum: 1 },
         openCount: { $sum: { $cond: [{ $eq: ['$status', 'open'] }, 1, 0] } },
       },
     },
   ]);
-  const given = round2(row?.given || 0);
-  const settled = round2(row?.settled || 0);
+  const taken = round2(row?.taken || 0);
+  const repaid = round2(row?.repaid || 0);
   return {
-    given,
-    settled,
-    outstanding: round2(Math.max(0, given - settled)),
+    taken,
+    repaid,
+    outstanding: round2(Math.max(0, taken - repaid)),
     count: row?.count || 0,
     openCount: row?.openCount || 0,
   };
 }
 
-/** Loans given + repayments received inside a date window (for period reports). */
+/** Loans taken + repayments made inside a date window (for period reports). */
 async function loanActivity(ownerId, range) {
   const [givenRow] = await Loan.aggregate([
     { $match: { shopOwner: ownerId, entryDate: { $gte: range.from, $lt: range.to } } },
@@ -108,8 +111,36 @@ async function loanActivity(ownerId, range) {
     { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
   ]);
   return {
-    given: { amount: round2(givenRow?.amount || 0), count: givenRow?.count || 0 },
+    taken: { amount: round2(givenRow?.amount || 0), count: givenRow?.count || 0 },
     repaid: { amount: round2(repaidRow?.amount || 0), count: repaidRow?.count || 0 },
+  };
+}
+
+/**
+ * Cash actually in the drawer, all time: the loan float that came in, less
+ * what has been repaid and handed to customers, plus what the card company
+ * and other income have paid back.
+ */
+export async function cashPosition(ownerId) {
+  const [txns, loans, repaid, income, expense] = await Promise.all([
+    summarise(ownerId, null),
+    moneySum(Loan, ownerId, null, 'principal'),
+    moneySum(LoanSettlement, ownerId, null),
+    moneySum(Income, ownerId, null),
+    moneySum(Expense, ownerId, null),
+  ]);
+
+  return {
+    inHand: round2(
+      loans.amount - repaid.amount - txns.givenAmount + txns.receivedAmount +
+        income.amount - expense.amount
+    ),
+    loanTaken: loans.amount,
+    loanRepaid: repaid.amount,
+    givenOut: txns.givenAmount,
+    settled: txns.receivedAmount,
+    income: income.amount,
+    expense: expense.amount,
   };
 }
 
@@ -119,7 +150,7 @@ export const dashboard = asyncHandler(async (req, res) => {
   const today = dayRange(date);
   const month = monthRange(date.slice(0, 7));
 
-  const [todayStats, monthStats, allTime, recent, todayIncome, todayExpense, loans] =
+  const [todayStats, monthStats, allTime, recent, todayIncome, todayExpense, loans, cash] =
     await Promise.all([
       summarise(ownerId, today),
       summarise(ownerId, month),
@@ -132,6 +163,7 @@ export const dashboard = asyncHandler(async (req, res) => {
       moneySum(Income, ownerId, today),
       moneySum(Expense, ownerId, today),
       loanTotals(ownerId),
+      cashPosition(ownerId),
     ]);
 
   res.json({
@@ -141,6 +173,7 @@ export const dashboard = asyncHandler(async (req, res) => {
     income: { today: todayIncome },
     expense: { today: todayExpense },
     loans,
+    cash,
     // Settlement is a running balance, so it is reported across all time.
     settlement: {
       receivedAmount: allTime.receivedAmount,
@@ -246,16 +279,16 @@ export const commissionReport = asyncHandler(async (req, res) => {
   const range = monthRange(month);
   const match = txnMatch(ownerId, range);
 
-  const [summary, byPercent, byType, byCustomer, byMachineRaw] = await Promise.all([
+  const [summary, byPercent, bySupplierRate, byCustomer, byMachineRaw] = await Promise.all([
     summarise(ownerId, range),
     Transaction.aggregate([
       { $match: match },
-      { $group: { _id: '$commissionPercent', ...SUM_STAGE } },
+      { $group: { _id: '$custPercent', ...SUM_STAGE } },
       { $sort: { _id: 1 } },
     ]),
     Transaction.aggregate([
       { $match: match },
-      { $group: { _id: '$commissionType', ...SUM_STAGE } },
+      { $group: { _id: '$supplierPercent', ...SUM_STAGE } },
       { $sort: { _id: 1 } },
     ]),
     Transaction.aggregate([
@@ -268,26 +301,26 @@ export const commissionReport = asyncHandler(async (req, res) => {
           ...SUM_STAGE,
         },
       },
-      { $sort: { ownerCommission: -1 } },
+      { $sort: { margin: -1 } },
     ]),
     Transaction.aggregate([
       { $match: match },
       { $group: { _id: '$machine', ...SUM_STAGE } },
-      { $sort: { ownerCommission: -1 } },
+      { $sort: { margin: -1 } },
     ]),
   ]);
 
   const byMachine = await withMachineNames(ownerId, byMachineRaw);
 
-  const avg = summary.requestedAmount
-    ? round2((summary.commissionAmount / summary.requestedAmount) * 100)
+  const avg = summary.swipedAmount
+    ? round2((summary.chargeToCustomer / summary.swipedAmount) * 100)
     : 0;
 
   res.json({
     month,
-    summary: { ...summary, averageCommissionPercent: avg },
-    byPercent: byPercent.map((r) => ({ commissionPercent: r._id, ...tidy(r) })),
-    byType: byType.map((r) => ({ commissionType: r._id, ...tidy(r) })),
+    summary: { ...summary, averageCustPercent: avg },
+    byPercent: byPercent.map((r) => ({ custPercent: r._id, ...tidy(r) })),
+    bySupplierRate: bySupplierRate.map((r) => ({ supplierPercent: r._id, ...tidy(r) })),
     byCustomer: byCustomer.map((r) => ({
       customerId: r._id,
       customerName: r.customerName,
@@ -328,7 +361,7 @@ export const customerReport = asyncHandler(async (req, res) => {
         ...SUM_STAGE,
       },
     },
-    { $sort: { cardAmount: -1 } },
+    { $sort: { swipedAmount: -1 } },
   ]);
 
   res.json({
@@ -351,7 +384,7 @@ export const machineReport = asyncHandler(async (req, res) => {
   const raw = await Transaction.aggregate([
     { $match: txnMatch(ownerId, range) },
     { $group: { _id: '$machine', ...SUM_STAGE } },
-    { $sort: { cardAmount: -1 } },
+    { $sort: { swipedAmount: -1 } },
   ]);
 
   res.json({

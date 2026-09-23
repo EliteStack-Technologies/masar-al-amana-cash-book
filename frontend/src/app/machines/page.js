@@ -43,6 +43,9 @@ export default function MachinesPage() {
                 </div>
                 <p className="ref mt-0.5 text-[10.5px] muted-2">{m.machineNumber}{m.cardCompany ? ` · ${m.cardCompany}` : ''}</p>
               </div>
+              <span className="ref shrink-0 text-[11px] muted-2">
+                {m.supplierPercent ? `${m.supplierPercent}%` : 'no %'}
+              </span>
               <span className="muted-2"><IconChevron size={16} /></span>
             </Link>
           ))}

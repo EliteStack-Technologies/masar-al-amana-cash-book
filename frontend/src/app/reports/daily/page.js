@@ -74,7 +74,7 @@ function DailyReport() {
                 <Card className="ruled py-0">
                   <Row label="Other income" value={data.income.amount} tone="leaf" />
                   <Row label="Expenses" value={data.expense.amount} tone="stamp" />
-                  <Row label="Loans given" value={data.loans.given.amount} />
+                  <Row label="Loans taken" value={data.loans.taken.amount} />
                   <Row label="Loan repayments" value={data.loans.repaid.amount} tone="leaf" />
                 </Card>
               </section>

@@ -6,9 +6,8 @@ import { StatusPill, SplitRail, cx } from '@/components/ui';
 import { IconCheck } from '@/components/Icons';
 
 /**
- * One entry in the book. The miniature rail shows the same division as the
- * detail screen: the card amount splitting into cash, the owner's share and
- * the card company's share.
+ * One swipe in the book. The miniature rail shows where the swipe went: the
+ * cash handed over, the shop's margin and the supplier's fee.
  */
 export function TransactionCard({ txn, selectable, selected, onToggle }) {
   const body = (
@@ -37,7 +36,7 @@ export function TransactionCard({ txn, selectable, selected, onToggle }) {
             <p className="truncate text-[14px] font-semibold">
               {txn.customerName || txn.customerMobile}
             </p>
-            <p className="sum shrink-0 text-[16px]">{money(txn.cardAmount)}</p>
+            <p className="sum shrink-0 text-[16px]">{money(txn.swipedAmount)}</p>
           </div>
 
           <div className="mt-0.5 flex items-baseline justify-between gap-2">
@@ -52,19 +51,19 @@ export function TransactionCard({ txn, selectable, selected, onToggle }) {
               size="sm"
               animate={false}
               segments={[
-                { label: 'Cash', value: txn.customerReceived, tone: 'ink' },
-                { label: 'Mine', value: txn.ownerCommission, tone: 'leaf' },
-                { label: 'Card co.', value: txn.companyCommission, tone: 'quiet' },
+                { label: 'Cash', value: txn.givenAmount, tone: 'ink' },
+                { label: 'Margin', value: txn.margin, tone: 'leaf' },
+                { label: 'Supplier', value: txn.supplierFee, tone: 'quiet' },
               ]}
             />
             <div className="mt-1.5 flex justify-between">
               <span className="colhead">
-                cash <span className="sum text-[11px] !font-semibold">{money(txn.customerReceived)}</span>
+                cash <span className="sum text-[11px] !font-semibold">{money(txn.givenAmount)}</span>
               </span>
               <span className="colhead">
-                mine{' '}
+                {txn.profit == null ? 'margin' : 'profit'}{' '}
                 <span className="sum text-[11px] !font-semibold text-leaf-500 dark:text-leaf-400">
-                  {money(txn.ownerCommission)}
+                  {money(txn.profit == null ? txn.margin : txn.profit)}
                 </span>
               </span>
             </div>

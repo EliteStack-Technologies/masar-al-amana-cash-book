@@ -17,26 +17,40 @@ const transactionSchema = new mongoose.Schema(
     // reports and exports stay correct even if a customer record changes.
     customerMobile: { type: String, default: '', trim: true, index: true },
     customerName: { type: String, default: '', trim: true },
-    requestedAmount: { type: Number, required: true, min: 0 },
-    commissionPercent: { type: Number, required: true, min: 0, max: 100 },
+
+    // --- what the owner types ---
+    swipedAmount: { type: Number, required: true, min: 0 },
+    // The rate charged to the customer, read against whichever amount was
+    // typed - see commissionType.
+    custPercent: { type: Number, default: 0, min: 0, max: 100 },
+    // Which end the typed amount was: 'included' means it was the swipe and
+    // the charge came out of it, 'excluded' means it was the customer's cash
+    // and the charge went on top.
     commissionType: {
       type: String,
       enum: ['included', 'excluded'],
-      required: true,
+      default: 'included',
+      index: true,
     },
-    ownerSharePercent: { type: Number, default: 50, min: 0, max: 100 },
     cardRefNumber: { type: String, default: '', trim: true, index: true },
     notes: { type: String, default: '', trim: true },
 
+    // Snapshot of the machine's rate at entry time, so re-rating a machine
+    // never rewrites old entries.
+    supplierPercent: { type: Number, default: 0, min: 0, max: 100 },
+
     // --- derived by computeAmounts(), never sent by the client ---
-    commissionAmount: { type: Number, required: true },
-    customerReceived: { type: Number, required: true },
-    cardAmount: { type: Number, required: true },
-    ownerCommission: { type: Number, required: true },
-    companyCommission: { type: Number, required: true },
-    settlementAmount: { type: Number, required: true },
+    givenAmount: { type: Number, required: true },      // cash handed over
+    chargeToCustomer: { type: Number, required: true }, // swiped - given
+    supplierFee: { type: Number, required: true },      // swiped x supplier %
+    supplierAccount: { type: Number, required: true },  // swiped - supplier fee
+    margin: { type: Number, required: true },           // charge - supplier fee
 
     // --- settlement ---
+    // What the company actually paid. Null until the money lands; banks round
+    // down, so it is typed rather than assumed.
+    settlementAmount: { type: Number, default: null },
+    profit: { type: Number, default: null }, // settlement - given
     settlementStatus: {
       type: String,
       enum: ['pending', 'received'],
@@ -64,6 +78,8 @@ transactionSchema.pre('validate', async function (next) {
       const seq = await nextSequence('transaction');
       this.txnNumber = `TXN-${String(seq).padStart(6, '0')}`;
     }
+    // givenAmount is already set on a re-save, so it stays the source of truth
+    // and the maths is stable however many times the row is touched.
     Object.assign(this, computeAmounts(this));
     next();
   } catch (err) {

@@ -19,7 +19,7 @@ export const settleDay = asyncHandler(async (req, res) => {
 
   const [agg] = await Transaction.aggregate([
     { $match: match },
-    { $group: { _id: null, expected: { $sum: '$settlementAmount' }, count: { $sum: 1 } } },
+    { $group: { _id: null, expected: { $sum: '$supplierAccount' }, count: { $sum: 1 } } },
   ]);
   if (!agg || !agg.count) {
     return res.status(400).json({ message: 'No pending entries on this day' });
@@ -43,15 +43,33 @@ export const settleDay = asyncHandler(async (req, res) => {
     createdBy: ownerId,
   });
 
-  await Transaction.updateMany(match, {
-    $set: {
-      settlementStatus: 'received',
-      receivedAt,
-      settlementNote: note,
-      settlementBatch: batch._id,
-      updatedBy: ownerId,
+  // A pipeline update so each row settles at its own expected figure. When
+  // the company paid a different total, the shortfall is spread across the
+  // day in proportion to what each swipe was owed.
+  const factor = expectedAmount ? receivedAmount / expectedAmount : 1;
+  await Transaction.updateMany(match, [
+    {
+      $set: {
+        settlementStatus: 'received',
+        receivedAt,
+        settlementNote: note,
+        settlementBatch: batch._id,
+        updatedBy: ownerId,
+        settlementAmount: { $round: [{ $multiply: ['$supplierAccount', factor] }, 2] },
+        profit: {
+          $round: [
+            {
+              $subtract: [
+                { $round: [{ $multiply: ['$supplierAccount', factor] }, 2] },
+                '$givenAmount',
+              ],
+            },
+            2,
+          ],
+        },
+      },
     },
-  });
+  ]);
 
   res.status(201).json({ settlement: batch });
 });
@@ -70,6 +88,8 @@ export const revertDay = asyncHandler(async (req, res) => {
         receivedAt: null,
         settlementNote: '',
         settlementBatch: null,
+        settlementAmount: null,
+        profit: null,
         updatedBy: ownerId,
       },
     }

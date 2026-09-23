@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
 import { api } from '@/lib/api';
-import { money, dateTime,moneyShort } from '@/lib/format';
+import { money, dateTime, moneyShort } from '@/lib/format';
 
 import {
-  Button, Card, ErrorNote, Row, SectionTitle, Skeleton, SplitRail, StatusPill, cx,
+  Button, Card, ErrorNote, Field, Row, SectionTitle, Skeleton, SplitRail, StatusPill, cx,
 } from '@/components/ui';
 import { IconCheck, IconClock, IconEdit, IconTrash } from '@/components/Icons';
 
@@ -36,12 +36,36 @@ function TransactionDetail({ params }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const [paid, setPaid] = useState('');
 
   useEffect(() => {
     api(`/transactions/${id}`)
       .then((d) => setTxn(d.transaction))
       .catch((err) => setError(err.message));
   }, [id]);
+
+  /** Mark the money in, or put it back to pending. */
+  const settle = async (status) => {
+    setBusy(true);
+    setError('');
+    try {
+      const d = await api(`/transactions/${id}/settlement`, {
+        method: 'PATCH',
+        body: {
+          status,
+          ...(status === 'received' && paid !== '' ? { settlementAmount: Number(paid) } : {}),
+        },
+      });
+      // Keep the populated machine/customer the list endpoint gave us.
+      setTxn((t) => ({ ...t, ...d.transaction, machine: t.machine, customer: t.customer }));
+      setSettling(false);
+      setPaid('');
+    } catch (err) {
+      setError(err.message);
+    }
+    setBusy(false);
+  };
 
   const remove = async () => {
     setBusy(true);
@@ -97,25 +121,21 @@ function TransactionDetail({ params }) {
           </p>
         )}
 
-        {/* The whole entry in one figure and one rail: the card amount
-            dividing into cash, the owner's share and the card company's. */}
+        {/* The whole swipe in one figure and one rail: what the machine took,
+            dividing into the customer's cash, the margin and the supplier's fee. */}
         <Card className="p-4">
           <div className="flex items-baseline justify-between gap-3 pb-3">
             <span className="colhead">Card was swiped for</span>
-            <span className="sum text-[28px] leading-none">{money(txn.cardAmount)}</span>
+            <span className="sum text-[28px] leading-none">{money(txn.swipedAmount)}</span>
           </div>
           <div className="border-t border-[var(--rule)] pt-3">
             <SplitRail
               segments={[
-                { label: 'Customer', value: txn.customerReceived, tone: 'ink' },
-                { label: 'Yours', value: txn.ownerCommission, tone: 'leaf' },
-                { label: 'Card co.', value: txn.companyCommission, tone: 'quiet' },
+                { label: 'Customer', value: txn.givenAmount, tone: 'ink' },
+                { label: 'Margin', value: txn.margin, tone: 'leaf' },
+                { label: 'Supplier', value: txn.supplierFee, tone: 'quiet' },
               ]}
-              caption={
-                txn.commissionType === 'included'
-                  ? `Commission came out of the ${moneyShort(txn.requestedAmount)} the customer asked for.`
-                  : `The customer kept the full ${moneyShort(txn.requestedAmount)}; commission was added on top.`
-              }
+              caption={`Charged ${moneyShort(txn.chargeToCustomer)} on a ${moneyShort(txn.swipedAmount)} swipe (${txn.custPercent}%).`}
             />
           </div>
         </Card>
@@ -125,53 +145,122 @@ function TransactionDetail({ params }) {
           <Card>
             <div className="flex items-baseline justify-between gap-3">
               <StatusPill status={txn.settlementStatus} />
-              <span className="sum text-[18px]">{money(txn.settlementAmount)}</span>
+              <span className="sum text-[18px]">
+                {money(received ? txn.settlementAmount : txn.supplierAccount)}
+              </span>
             </div>
             <p className="mt-2 text-[12.5px] muted">
               {received
                 ? `Came in on ${dateTime(txn.receivedAt)}.`
-                : 'Still to come in from the card company.'}
-              {' '}
+                : 'Still to come in from the card company.'}{' '}
               <span className="muted-2">
-                = cash {money(txn.customerReceived)} + your share {money(txn.ownerCommission)}
+                Expected {money(txn.supplierAccount)} = the swipe less the {txn.supplierPercent}% fee.
               </span>
             </p>
+            {received ? (
+              <p className="mt-1 text-[12.5px]">
+                Profit <span className="sum text-leaf-600 dark:text-leaf-400">{money(txn.profit)}</span>
+                <span className="muted-2"> = settlement less the {money(txn.givenAmount)} cash</span>
+              </p>
+            ) : null}
             {received && txn.settlementNote ? (
               <p className="mt-1 text-[12.5px] muted-2">Note: {txn.settlementNote}</p>
             ) : null}
-            <Link
-              href={`/reports/daily?date=${new Date(txn.txnDate).toLocaleDateString('en-CA')}`}
-              className="mt-3.5 block"
-            >
-              <Button type="button" variant="soft" className="w-full">
-                <IconClock size={16} /> Settle this day in the Daily Report
+
+            {received ? (
+              <Button
+                type="button"
+                variant="soft"
+                className="mt-3.5 w-full"
+                loading={busy}
+                onClick={() => settle('pending')}
+              >
+                Move back to pending
               </Button>
-            </Link>
+            ) : settling ? (
+              <div className="mt-3.5 space-y-3 border-t border-[var(--rule)] pt-3">
+                <Field
+                  label="Amount the company actually paid"
+                  hint="Leave it blank unless the bank rounded it"
+                >
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 sum text-[11px] muted-2">
+                      AED
+                    </span>
+                    <input
+                      className="field sum pl-12"
+                      type="number"
+                      inputMode="decimal"
+                      min="0"
+                      step="0.01"
+                      value={paid}
+                      placeholder={String(txn.supplierAccount)}
+                      onChange={(e) => setPaid(e.target.value)}
+                    />
+                  </div>
+                </Field>
+                <p className="text-[11.5px] muted-2">
+                  Profit will be{' '}
+                  {money((paid === '' ? txn.supplierAccount : Number(paid)) - txn.givenAmount)}.
+                </p>
+                <div className="flex gap-2">
+                  <Button type="button" variant="soft" className="flex-1" onClick={() => setSettling(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="stamp"
+                    className="flex-1"
+                    loading={busy}
+                    onClick={() => settle('received')}
+                  >
+                    Mark received
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-3.5 flex gap-2">
+                <Button type="button" variant="stamp" className="flex-1" onClick={() => setSettling(true)}>
+                  <IconCheck size={16} /> Money received
+                </Button>
+                <Link
+                  href={`/reports/daily?date=${new Date(txn.txnDate).toLocaleDateString('en-CA')}`}
+                  className="flex-1"
+                >
+                  <Button type="button" variant="soft" className="w-full">
+                    <IconClock size={16} /> Whole day
+                  </Button>
+                </Link>
+              </div>
+            )}
           </Card>
         </section>
 
         <section>
           <SectionTitle>Working</SectionTitle>
           <Card className="ruled py-0">
-            <Row label="Customer asked for" value={txn.requestedAmount} />
+            <Row label="Swiped" value={txn.swipedAmount} strong />
+            <Row label="Cash you gave out" value={txn.givenAmount} strong />
             <Row
-              label="Commission"
-              sub={`${txn.commissionPercent}% · ${txn.commissionType}`}
-              value={txn.commissionAmount}
+              label="Charge to customer"
+              sub={
+                txn.commissionType === 'excluded'
+                  ? `${txn.custPercent}% on top of the cash`
+                  : `${txn.custPercent}% of the swipe`
+              }
+              value={txn.chargeToCustomer}
             />
             <Row
-              label="Your share"
-              sub={`${txn.ownerSharePercent}% of commission`}
-              value={txn.ownerCommission}
-              tone="leaf"
+              label="Supplier fee"
+              sub={`${txn.supplierPercent}% to ${txn.machine?.cardCompany || 'the card company'}`}
+              value={txn.supplierFee}
+              tone="stamp"
             />
-            <Row
-              label="Card company's share"
-              sub={`${100 - txn.ownerSharePercent}% of commission`}
-              value={txn.companyCommission}
-            />
-            <Row label="Cash you gave out" value={txn.customerReceived} strong />
-            <Row label="Card transaction" value={txn.cardAmount} strong />
+            <Row label="Margin" sub="Charge less the supplier fee" value={txn.margin} tone="leaf" />
+            <Row label="Supplier A/C" sub="Expected settlement" value={txn.supplierAccount} />
+            {received ? (
+              <Row label="Profit" sub="Settlement less the cash" value={txn.profit} tone="leaf" strong />
+            ) : null}
           </Card>
         </section>
 

@@ -34,7 +34,7 @@ function WeeklyReport() {
     return () => { alive = false; };
   }, [date]);
 
-  const peak = data ? Math.max(...data.days.map((d) => d.cardAmount), 1) : 1;
+  const peak = data ? Math.max(...data.days.map((d) => d.swipedAmount), 1) : 1;
 
   return (
     <AppShell
@@ -58,7 +58,7 @@ function WeeklyReport() {
               <Card className="ruled py-0">
                 <Row label="Other income" value={data.income.amount} tone="leaf" />
                 <Row label="Expenses" value={data.expense.amount} tone="stamp" />
-                <Row label="Loans given" value={data.loans.given.amount} />
+                <Row label="Loans taken" value={data.loans.taken.amount} />
                 <Row label="Loan repayments" value={data.loans.repaid.amount} tone="leaf" />
               </Card>
             </section>
@@ -95,13 +95,13 @@ function DayRow({ day, peak }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="sum text-[14px]">{money(day.cardAmount)}</span>
-          <span className="sum text-[12px] !font-semibold text-leaf-600">+{moneyShort(day.ownerCommission)}</span>
+          <span className="sum text-[14px]">{money(day.swipedAmount)}</span>
+          <span className="sum text-[12px] !font-semibold text-leaf-600">+{moneyShort(day.margin)}</span>
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--paper-2)]">
-          <div className={cx('h-full rounded-full', day.pendingCount > 0 ? 'bg-stamp-500' : 'bg-brand-500')} style={{ width: `${Math.max(3, (day.cardAmount / peak) * 100)}%` }} />
+          <div className={cx('h-full rounded-full', day.pendingCount > 0 ? 'bg-stamp-500' : 'bg-brand-500')} style={{ width: `${Math.max(3, (day.swipedAmount / peak) * 100)}%` }} />
         </div>
-        <p className="mt-1 text-[11px] muted-2">{day.count} {day.count === 1 ? 'entry' : 'entries'} · cash {moneyShort(day.customerReceived)}</p>
+        <p className="mt-1 text-[11px] muted-2">{day.count} {day.count === 1 ? 'swipe' : 'swipes'} · cash {moneyShort(day.givenAmount)}</p>
       </div>
       <span className="muted-2"><IconChevron size={15} /></span>
     </Link>

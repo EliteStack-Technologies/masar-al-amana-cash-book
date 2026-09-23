@@ -3,7 +3,7 @@ import Transaction from '../models/Transaction.js';
 import Customer from '../models/Customer.js';
 import { asyncHandler } from '../middleware/error.js';
 
-const EDITABLE = ['name', 'deviceId', 'cardCompany', 'status', 'notes'];
+const EDITABLE = ['name', 'deviceId', 'cardCompany', 'supplierPercent', 'status', 'notes'];
 
 export function buildFilter(query, ownerId) {
   const filter = { shopOwner: ownerId };

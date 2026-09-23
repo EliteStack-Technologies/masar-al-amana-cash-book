@@ -60,7 +60,7 @@ export default function SettlementsPage() {
 
   const selectedTotal = (pending || [])
     .filter((t) => selected.has(t._id))
-    .reduce((sum, t) => sum + t.settlementAmount, 0);
+    .reduce((sum, t) => sum + t.supplierAccount, 0);
 
   return (
     <AppShell

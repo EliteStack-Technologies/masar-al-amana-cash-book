@@ -74,7 +74,7 @@ export default function LoanDetailPage() {
   };
 
   return (
-    <AppShell title={loan?.borrowerName || 'Loan'} subtitle={loan?.loanNumber} back>
+    <AppShell title={loan?.lenderName || 'Loan'} subtitle={loan?.loanNumber} back>
       <ErrorNote className="mb-4">{error}</ErrorNote>
 
       {!loan && !error ? (
@@ -92,7 +92,7 @@ export default function LoanDetailPage() {
                   { label: 'Repaid', value: loan.settledAmount, tone: 'leaf' },
                   { label: 'Outstanding', value: loan.outstanding, tone: 'stamp' },
                 ]}
-                caption={`Loan of ${money(loan.principal)} given on ${dateOnly(loan.entryDate)}.`}
+                caption={`Loan of ${money(loan.principal)} taken in on ${dateOnly(loan.entryDate)}.`}
               />
             </div>
           </Card>

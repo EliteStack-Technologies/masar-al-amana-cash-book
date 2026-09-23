@@ -11,19 +11,19 @@ const REPORTS = [
   {
     href: '/reports/daily',
     icon: IconCalendar,
-    title: 'One day',
+    title: 'Daily',
     detail: 'Any single day — transactions, income, expenses, loans',
   },
   {
     href: '/reports/weekly',
     icon: IconCalendar,
-    title: 'One week',
+    title: 'Weekly',
     detail: 'Mon–Sun, day by day',
   },
   {
     href: '/reports/monthly',
     icon: IconChart,
-    title: 'One month',
+    title: 'Monthly',
     detail: 'A month, broken down day by day',
   },
   {

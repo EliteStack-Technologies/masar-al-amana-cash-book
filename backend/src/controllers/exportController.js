@@ -34,21 +34,27 @@ const TXN_COLUMNS = [
   { header: 'Date', key: 'date', width: 18, pdf: 80 },
   { header: 'Customer', key: 'customerName', width: 18, pdf: 74 },
   { header: 'Mobile', key: 'customerMobile', width: 14, pdf: 62 },
-  { header: 'Requested', key: 'requestedAmount', width: 12, pdf: 52, money: true },
-  { header: 'Customer Got', key: 'customerReceived', width: 13, pdf: 54, money: true },
-  { header: 'Card Amount', key: 'cardAmount', width: 13, pdf: 54, money: true },
-  { header: 'Comm %', key: 'commissionPercent', width: 9, pdf: 40 },
-  { header: 'Commission', key: 'commissionAmount', width: 12, pdf: 52, money: true },
-  { header: 'Owner Share', key: 'ownerCommission', width: 12, pdf: 48, money: true },
-  { header: 'Company Share', key: 'companyCommission', width: 13, pdf: 52, money: true },
-  { header: 'Card Ref', key: 'cardRefNumber', width: 16, pdf: 66 },
-  { header: 'Settlement', key: 'settlementStatus', width: 12, pdf: 50 },
+  { header: 'Swiped', key: 'swipedAmount', width: 12, pdf: 52, money: true },
+  { header: 'Given', key: 'givenAmount', width: 12, pdf: 52, money: true },
+  { header: 'Charge', key: 'chargeToCustomer', width: 11, pdf: 46, money: true },
+  { header: 'Cust %', key: 'custPercent', width: 8, pdf: 36 },
+  { header: 'Comm', key: 'commissionType', width: 10, pdf: 42 },
+  { header: 'Supp %', key: 'supplierPercent', width: 8, pdf: 36 },
+  { header: 'Supplier Fee', key: 'supplierFee', width: 12, pdf: 50, money: true },
+  { header: 'Margin', key: 'margin', width: 11, pdf: 46, money: true },
+  { header: 'Supplier A/C', key: 'supplierAccount', width: 13, pdf: 54, money: true },
+  { header: 'Settlement', key: 'settlement', width: 13, pdf: 54 },
+  { header: 'Profit', key: 'profitShown', width: 11, pdf: 46 },
+  { header: 'Status', key: 'settlementStatus', width: 11, pdf: 46 },
 ];
 
 const txnRow = (t) => ({
   ...t,
   date: fmtDate(t.txnDate),
   cardRefNumber: t.cardRefNumber || '-',
+  // Blank until the money lands, the way the shop's own sheet reads.
+  settlement: t.settlementAmount == null ? '-' : Number(t.settlementAmount).toFixed(2),
+  profitShown: t.profit == null ? '-' : Number(t.profit).toFixed(2),
 });
 
 const INCOME_COLUMNS = [
@@ -71,10 +77,10 @@ const EXPENSE_COLUMNS = [
 
 const LOAN_COLUMNS = [
   { header: 'No', key: 'loanNumber', width: 12, pdf: 66 },
-  { header: 'Borrower', key: 'borrowerName', width: 20, pdf: 110 },
-  { header: 'Mobile', key: 'borrowerMobile', width: 14, pdf: 80 },
+  { header: 'Lender', key: 'lenderName', width: 20, pdf: 110 },
+  { header: 'Mobile', key: 'lenderMobile', width: 14, pdf: 80 },
   { header: 'Date', key: 'date', width: 16, pdf: 84 },
-  { header: 'Loan Given', key: 'principal', width: 13, pdf: 74, money: true },
+  { header: 'Loan Taken', key: 'principal', width: 13, pdf: 74, money: true },
   { header: 'Repaid', key: 'settledAmount', width: 13, pdf: 74, money: true },
   { header: 'Outstanding', key: 'outstanding', width: 13, pdf: 74, money: true },
   { header: 'Status', key: 'status', width: 10, pdf: 54 },
@@ -84,8 +90,7 @@ const CUSTOMER_COLUMNS = [
   { header: 'No', key: 'custNumber', width: 12, pdf: 70 },
   { header: 'Name', key: 'name', width: 20, pdf: 120 },
   { header: 'Mobile', key: 'mobile', width: 14, pdf: 90 },
-  { header: 'Commission %', key: 'commissionPercent', width: 12, pdf: 80 },
-  { header: 'Type', key: 'commissionType', width: 12, pdf: 80 },
+  { header: 'Cust %', key: 'commissionPercent', width: 12, pdf: 80 },
   { header: 'Machine', key: 'machineName', width: 18, pdf: 120 },
   { header: 'Status', key: 'status', width: 10, pdf: 70 },
 ];
@@ -94,6 +99,7 @@ const MACHINE_COLUMNS = [
   { header: 'No', key: 'machineNumber', width: 12, pdf: 80 },
   { header: 'Name', key: 'name', width: 20, pdf: 140 },
   { header: 'Card Company', key: 'cardCompany', width: 18, pdf: 140 },
+  { header: 'Supplier %', key: 'supplierPercent', width: 12, pdf: 90 },
   { header: 'Device ID', key: 'deviceId', width: 16, pdf: 120 },
   { header: 'Status', key: 'status', width: 10, pdf: 80 },
 ];
@@ -102,29 +108,34 @@ const CUST_REPORT_COLUMNS = [
   { header: 'Customer', key: 'customerName', width: 20, pdf: 140 },
   { header: 'Mobile', key: 'customerMobile', width: 14, pdf: 100 },
   { header: 'Txns', key: 'count', width: 8, pdf: 50 },
-  { header: 'Card Amount', key: 'cardAmount', width: 14, pdf: 90, money: true },
-  { header: 'Commission', key: 'commissionAmount', width: 14, pdf: 90, money: true },
-  { header: 'Owner Share', key: 'ownerCommission', width: 14, pdf: 90, money: true },
+  { header: 'Swiped', key: 'swipedAmount', width: 14, pdf: 84, money: true },
+  { header: 'Given', key: 'givenAmount', width: 14, pdf: 84, money: true },
+  { header: 'Charge', key: 'chargeToCustomer', width: 14, pdf: 76, money: true },
+  { header: 'Margin', key: 'margin', width: 14, pdf: 76, money: true },
+  { header: 'Profit', key: 'profit', width: 14, pdf: 76, money: true },
 ];
 
 const MACHINE_REPORT_COLUMNS = [
   { header: 'Machine', key: 'machineName', width: 20, pdf: 140 },
   { header: 'Card Company', key: 'cardCompany', width: 18, pdf: 120 },
   { header: 'Txns', key: 'count', width: 8, pdf: 50 },
-  { header: 'Card Amount', key: 'cardAmount', width: 14, pdf: 90, money: true },
-  { header: 'Commission', key: 'commissionAmount', width: 14, pdf: 90, money: true },
-  { header: 'Owner Share', key: 'ownerCommission', width: 14, pdf: 90, money: true },
+  { header: 'Swiped', key: 'swipedAmount', width: 14, pdf: 84, money: true },
+  { header: 'Given', key: 'givenAmount', width: 14, pdf: 84, money: true },
+  { header: 'Charge', key: 'chargeToCustomer', width: 14, pdf: 76, money: true },
+  { header: 'Margin', key: 'margin', width: 14, pdf: 76, money: true },
+  { header: 'Profit', key: 'profit', width: 14, pdf: 76, money: true },
 ];
 
 const txnSummaryLines = (s) => [
-  ['Total transactions', s.count, false],
-  ['Total cash given to customers', s.customerReceived, true],
-  ['Total card transaction amount', s.cardAmount, true],
-  ['Total commission', s.commissionAmount, true],
-  ['Shop owner commission', s.ownerCommission, true],
-  ['Credit card company commission', s.companyCommission, true],
+  ['Total swipes', s.count, false],
+  ['Total swiped', s.swipedAmount, true],
+  ['Total cash given to customers', s.givenAmount, true],
+  ['Total charged to customers', s.chargeToCustomer, true],
+  ['Supplier fee', s.supplierFee, true],
+  ['Margin (expected profit)', s.margin, true],
+  ['Profit (settled entries)', s.profit, true],
   ['Settlement received', s.receivedAmount, true],
-  ['Settlement pending', s.pendingAmount, true],
+  ['Still with the card company', s.pendingAmount, true],
 ];
 
 /**
@@ -215,8 +226,8 @@ async function gatherReport(query, ownerId) {
       })),
       summaryLines: [
         ['Loans', t.count, false],
-        ['Total loan given', t.given, true],
-        ['Total repaid', t.settled, true],
+        ['Total loan taken', t.taken, true],
+        ['Total repaid', t.repaid, true],
         ['Total outstanding', t.outstanding, true],
       ],
     };
@@ -303,7 +314,9 @@ export const exportExcel = asyncHandler(async (req, res) => {
   sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
   rows.forEach((r) => sheet.addRow(r));
 
-  columns.filter((c) => c.money).forEach((c) => { sheet.getColumn(c.key).numFmt = '#,##0.00'; });
+  columns.filter((c) => c.money).forEach((c) => {
+    sheet.getColumn(c.key).numFmt = '"AED" #,##0.00';
+  });
   sheet.autoFilter = { from: 'A1', to: { row: 1, column: columns.length } };
 
   const sum = wb.addWorksheet('Summary');
@@ -334,12 +347,13 @@ export const exportPdf = asyncHandler(async (req, res) => {
   doc.fontSize(9).fillColor('#64748b').text('Generated ' + fmtDate(new Date()));
   doc.moveDown(0.8);
 
-  // PDFKit's built-in fonts have no rupee glyph, so amounts are prefixed "Rs.".
+  doc.fontSize(9).fillColor('#64748b').text('All amounts in AED');
+  doc.moveDown(0.5);
   doc.fontSize(11).fillColor('#0f172a').text('Summary');
   doc.moveDown(0.3);
   doc.fontSize(9).fillColor('#334155');
   summaryLines.forEach(([label, value, isMoney]) => {
-    const shown = isMoney ? 'Rs. ' + Number(value).toFixed(2) : value;
+    const shown = isMoney ? 'AED ' + Number(value).toFixed(2) : value;
     doc.text(label + ': ' + shown);
   });
   doc.moveDown(0.9);

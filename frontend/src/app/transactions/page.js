@@ -252,9 +252,9 @@ function TransactionsList() {
 /** Totals for the whole filtered set, not just the loaded page. */
 function TotalsBar({ totals }) {
   const cells = [
-    ['Cash out', totals.customerReceived, ''],
-    ['Card in', totals.cardAmount, ''],
-    ['Yours', totals.ownerCommission, 'text-leaf-500 dark:text-leaf-400'],
+    ['Cash out', totals.givenAmount, ''],
+    ['Swiped', totals.swipedAmount, ''],
+    ['Margin', totals.margin, 'text-leaf-500 dark:text-leaf-400'],
   ];
   return (
     <div className="card grid grid-cols-3 p-0">

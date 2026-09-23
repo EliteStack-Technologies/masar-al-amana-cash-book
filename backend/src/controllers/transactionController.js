@@ -4,9 +4,9 @@ import CardMachine from '../models/CardMachine.js';
 import { asyncHandler } from '../middleware/error.js';
 
 const EDITABLE = [
-  'machine', 'customer', 'customerName', 'customerMobile', 'requestedAmount',
-  'commissionPercent', 'commissionType', 'ownerSharePercent', 'cardRefNumber',
-  'notes', 'txnDate',
+  'machine', 'customer', 'customerName', 'customerMobile', 'swipedAmount',
+  'custPercent', 'givenAmount', 'commissionType', 'cardRefNumber', 'notes',
+  'txnDate',
 ];
 
 /**
@@ -46,9 +46,9 @@ export function buildFilter(query, ownerId) {
   }
 
   if (query.minAmount || query.maxAmount) {
-    filter.requestedAmount = {};
-    if (query.minAmount) filter.requestedAmount.$gte = Number(query.minAmount);
-    if (query.maxAmount) filter.requestedAmount.$lte = Number(query.maxAmount);
+    filter.swipedAmount = {};
+    if (query.minAmount) filter.swipedAmount.$gte = Number(query.minAmount);
+    if (query.maxAmount) filter.swipedAmount.$lte = Number(query.maxAmount);
   }
 
   const q = String(query.q || '').trim();
@@ -61,7 +61,7 @@ export function buildFilter(query, ownerId) {
       { cardRefNumber: rx },
       { customerName: rx },
     ];
-    if (!Number.isNaN(Number(q))) or.push({ requestedAmount: Number(q) });
+    if (!Number.isNaN(Number(q))) or.push({ swipedAmount: Number(q) });
     filter.$or = or;
   }
 
@@ -88,11 +88,11 @@ export const listTransactions = asyncHandler(async (req, res) => {
       {
         $group: {
           _id: null,
-          requestedAmount: { $sum: '$requestedAmount' },
-          customerReceived: { $sum: '$customerReceived' },
-          cardAmount: { $sum: '$cardAmount' },
-          commissionAmount: { $sum: '$commissionAmount' },
-          ownerCommission: { $sum: '$ownerCommission' },
+          swipedAmount: { $sum: '$swipedAmount' },
+          givenAmount: { $sum: '$givenAmount' },
+          chargeToCustomer: { $sum: '$chargeToCustomer' },
+          supplierFee: { $sum: '$supplierFee' },
+          margin: { $sum: '$margin' },
         },
       },
     ]),
@@ -121,14 +121,18 @@ export const getTransaction = asyncHandler(async (req, res) => {
 export const createTransaction = asyncHandler(async (req, res) => {
   const body = req.body || {};
 
-  if (!(Number(body.requestedAmount) > 0)) {
-    return res.status(400).json({ message: 'Cash amount must be greater than 0' });
-  }
-  if (!['included', 'excluded'].includes(body.commissionType)) {
-    return res.status(400).json({ message: 'Choose commission included or excluded' });
+  const excluded = body.commissionType === 'excluded';
+  // Whichever end the owner typed has to be there; the other is derived.
+  const typed = excluded ? body.givenAmount : body.swipedAmount;
+  if (!(Number(typed) > 0)) {
+    return res.status(400).json({
+      message: excluded
+        ? 'Cash to the customer must be greater than 0'
+        : 'Swiped amount must be greater than 0',
+    });
   }
 
-  const { customer } = await resolveRefs(body, req.user._id);
+  const { machine, customer } = await resolveRefs(body, req.user._id);
 
   const payload = {};
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
@@ -138,15 +142,15 @@ export const createTransaction = asyncHandler(async (req, res) => {
     payload.customer = customer._id;
     payload.customerName = customer.name;
     payload.customerMobile = customer.mobile;
-    if (body.commissionPercent === undefined || body.commissionPercent === '') {
-      payload.commissionPercent = customer.commissionPercent;
+    if (body.custPercent === undefined || body.custPercent === '') {
+      payload.custPercent = customer.commissionPercent;
     }
   } else {
     // Walk-in: keep whatever name/mobile was typed (may be blank).
     payload.customer = null;
   }
-  payload.ownerSharePercent =
-    body.ownerSharePercent ?? req.user.defaultOwnerSharePercent ?? 50;
+  // The machine's rate is snapshotted, never typed per entry.
+  payload.supplierPercent = machine.supplierPercent || 0;
   payload.shopOwner = req.user._id;
   payload.createdBy = req.user._id;
 
@@ -164,12 +168,23 @@ export const updateTransaction = asyncHandler(async (req, res) => {
     if (req.body[key] !== undefined) txn[key] = req.body[key];
   }
 
+  // Whichever of the two the owner just touched wins: a re-typed rate has to
+  // clear the amount derived from it, or computeAmounts() would keep reading
+  // the rate back out of the stored pair. Which one to clear depends on the
+  // end the entry was typed from.
+  if (req.body.custPercent !== undefined) {
+    const excluded = (req.body.commissionType || txn.commissionType) === 'excluded';
+    if (excluded && req.body.swipedAmount === undefined) txn.swipedAmount = undefined;
+    if (!excluded && req.body.givenAmount === undefined) txn.givenAmount = undefined;
+  }
+
   // If the machine/customer changed, re-verify and re-snapshot.
   if (req.body.machine !== undefined || req.body.customer !== undefined) {
-    const { customer } = await resolveRefs(
+    const { machine, customer } = await resolveRefs(
       { machine: txn.machine, customer: txn.customer || undefined },
       req.user._id
     );
+    if (req.body.machine !== undefined) txn.supplierPercent = machine.supplierPercent || 0;
     if (customer) {
       txn.customer = customer._id;
       txn.customerName = customer.name;
@@ -194,8 +209,20 @@ export const setSettlement = asyncHandler(async (req, res) => {
   const txn = await Transaction.findOne({ _id: req.params.id, shopOwner: req.user._id });
   if (!txn) return res.status(404).json({ message: 'Transaction not found' });
 
+  if (status === 'received') {
+    // Default to what the company owes; the owner corrects it when the bank
+    // rounds the deposit down. Profit follows from it in the model hook.
+    const typed = req.body.settlementAmount;
+    txn.settlementAmount =
+      typed === undefined || typed === '' || typed === null ? txn.supplierAccount : Number(typed);
+    txn.receivedAt = new Date(req.body.receivedAt || Date.now());
+  } else {
+    txn.settlementAmount = null;
+    txn.receivedAt = null;
+    txn.settlementNote = '';
+    txn.settlementBatch = null;
+  }
   txn.settlementStatus = status;
-  txn.receivedAt = status === 'received' ? new Date(req.body.receivedAt || Date.now()) : null;
   txn.updatedBy = req.user._id;
 
   await txn.save();
@@ -207,9 +234,20 @@ export const bulkSettle = asyncHandler(async (req, res) => {
   const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
   if (!ids.length) return res.status(400).json({ message: 'No transactions selected' });
 
+  // A pipeline update so every row settles at its own expected figure.
   const result = await Transaction.updateMany(
     { _id: { $in: ids }, shopOwner: req.user._id, settlementStatus: 'pending' },
-    { $set: { settlementStatus: 'received', receivedAt: new Date(), updatedBy: req.user._id } }
+    [
+      {
+        $set: {
+          settlementStatus: 'received',
+          receivedAt: new Date(),
+          updatedBy: req.user._id,
+          settlementAmount: '$supplierAccount',
+          profit: { $round: [{ $subtract: ['$supplierAccount', '$givenAmount'] }, 2] },
+        },
+      },
+    ]
   );
   res.json({ updated: result.modifiedCount });
 });

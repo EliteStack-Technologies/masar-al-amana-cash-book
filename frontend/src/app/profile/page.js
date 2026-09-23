@@ -13,7 +13,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState({
     name: user?.name || '',
     shopName: user?.shopName || '',
-    defaultCommissionPercent: String(user?.defaultCommissionPercent ?? 30),
+    defaultCommissionPercent: String(user?.defaultCommissionPercent ?? 3),
     defaultOwnerSharePercent: String(user?.defaultOwnerSharePercent ?? 50),
   });
   const [profileMsg, setProfileMsg] = useState('');
@@ -104,7 +104,7 @@ export default function ProfilePage() {
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Default commission %" hint="Fills in on a new entry">
+              <Field label="Default charge to customer %" hint="Fills in on a new swipe">
                 <input
                   className="field ref"
                   type="number"

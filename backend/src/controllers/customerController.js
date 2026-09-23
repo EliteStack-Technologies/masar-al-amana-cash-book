@@ -3,7 +3,7 @@ import Transaction from '../models/Transaction.js';
 import { asyncHandler } from '../middleware/error.js';
 
 const EDITABLE = [
-  'name', 'mobile', 'commissionPercent', 'commissionType', 'machine', 'status', 'notes',
+  'name', 'mobile', 'commissionPercent', 'machine', 'status', 'notes',
 ];
 
 /** Query params -> Mongo filter, always scoped to the signed-in owner. */
@@ -54,10 +54,6 @@ export const createCustomer = asyncHandler(async (req, res) => {
   if (!body.name || !String(body.name).trim()) {
     return res.status(400).json({ message: 'Customer name is required' });
   }
-  if (!body.mobile || !String(body.mobile).trim()) {
-    return res.status(400).json({ message: 'Mobile number is required' });
-  }
-
   const payload = { shopOwner: req.user._id, createdBy: req.user._id };
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
   if (!payload.machine) payload.machine = null;

@@ -30,7 +30,7 @@ export default function MonthlyReportPage() {
     };
   }, [month]);
 
-  const peak = data ? Math.max(...data.days.map((d) => d.cardAmount), 1) : 1;
+  const peak = data ? Math.max(...data.days.map((d) => d.swipedAmount), 1) : 1;
 
   return (
     <AppShell title="One month" subtitle={month} back>
@@ -55,7 +55,7 @@ export default function MonthlyReportPage() {
                 <Card className="ruled py-0">
                   <Row label="Other income" value={data.income.amount} tone="leaf" />
                   <Row label="Expenses" value={data.expense.amount} tone="stamp" />
-                  <Row label="Loans given" value={data.loans.given.amount} />
+                  <Row label="Loans taken" value={data.loans.taken.amount} />
                   <Row label="Loan repayments" value={data.loans.repaid.amount} tone="leaf" />
                 </Card>
               </section>
@@ -106,20 +106,20 @@ function DayRow({ day, peak }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="sum text-[14px]">{money(day.cardAmount)}</span>
+          <span className="sum text-[14px]">{money(day.swipedAmount)}</span>
           <span className="sum text-[12px] !font-semibold text-leaf-500 dark:text-leaf-400">
-            +{moneyShort(day.ownerCommission)}
+            +{moneyShort(day.margin)}
           </span>
         </div>
         <div className="mt-1.5 h-1.5 bg-[var(--paper-2)]">
           <div
             className={cx('h-full', day.pendingCount > 0 ? 'bg-stamp-500' : 'bg-ink-900 dark:bg-ink-200')}
-            style={{ width: `${Math.max(3, (day.cardAmount / peak) * 100)}%` }}
+            style={{ width: `${Math.max(3, (day.swipedAmount / peak) * 100)}%` }}
           />
         </div>
         <p className="mt-1 text-[11px] muted-2">
-          {day.count} {day.count === 1 ? 'entry' : 'entries'} · cash{' '}
-          {moneyShort(day.customerReceived)}
+          {day.count} {day.count === 1 ? 'swipe' : 'swipes'} · cash{' '}
+          {moneyShort(day.givenAmount)}
           {day.pendingCount > 0 && ` · ${day.pendingCount} still owed`}
         </p>
       </div>

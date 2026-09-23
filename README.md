@@ -1,7 +1,7 @@
 # Cash Book — Credit Card Transaction Tracking System
 
 A mobile-first web app for a shop owner who gives customers cash against their
-credit card, and needs to track commission, settlement and reports.
+credit card, and needs to track charges, settlement, loans and reports.
 
 **Record → Calculate → Track → Settle → Report**
 
@@ -88,49 +88,77 @@ password from inside the app under **Profile → Change password**.
 
 ---
 
-## How the commission is calculated
+## How a swipe is calculated
 
 `backend/src/utils/calc.js` is the single source of truth. The New Transaction
 screen mirrors it in `frontend/src/lib/format.js` so the figures update live as
 you type, before anything is saved.
 
-### Commission **included** — taken out of the cash
+You type **one amount** and the rate you are charging on it, then say which end
+of the deal that amount is:
 
-Customer asks for ₹1,000 at 30%:
+| `commissionType` | The amount you typed is | AED 1,000 at 3% |
+| ---------------- | ----------------------- | --------------- |
+| `included` | what the card is swiped for, charge comes out of it | swipe 1,000, cash **970** |
+| `excluded` | the cash the customer walks away with, charge goes on top | swipe **1,030**, cash 1,000 |
 
-| Figure               | Amount  |
-| -------------------- | ------- |
-| Commission           | ₹300    |
-| **Customer receives**| **₹700** |
-| **Card swiped for**  | **₹1,000** |
-| Shop owner share (50%) | ₹150  |
-| Card company share (50%) | ₹150 |
-| **Card company pays you back** | **₹850** (700 + 150) |
+The other figure is derived, and you can round it by hand — the rate then
+follows from what you actually did, read against the amount you typed. So a
+3% deal still reads as 3% however the other end was nudged. Whichever you
+touched last is the truth, on the screen and on the server.
 
-### Commission **excluded** — added on top of the swipe
+The supplier fee always comes off the **swipe**, whichever mode was used.
 
-Customer asks for ₹1,000 at 30%:
+### A worked swipe
 
-| Figure               | Amount    |
-| -------------------- | --------- |
-| Commission           | ₹300      |
-| **Customer receives**| **₹1,000** |
-| **Card swiped for**  | **₹1,300** |
-| Shop owner share (50%) | ₹150    |
-| Card company share (50%) | ₹150  |
+Swiped AED 4,311 at 2.57%, on a machine whose supplier rate is 1.90%:
 
-The **split is set per transaction**. It defaults to 50/50 (or whatever you set
-as your default in Profile), and you can change it on any individual
-transaction — enter your share %, and the card company gets the rest.
+| Figure | How it is worked out | Amount |
+| ------ | -------------------- | ------ |
+| Charge to customer | swiped − given | **AED 111.00** |
+| Cust % | charge ÷ swiped | **2.57%** |
+| Supplier fee | swiped × supplier % | **AED 81.91** |
+| **Cash you hand over** | swiped − charge | **AED 4,200.00** |
+| Margin | charge − supplier fee | **AED 29.09** |
+| Supplier A/C | swiped − supplier fee | **AED 4,229.09** |
+| Settlement | what actually landed (typed) | **AED 4,229.00** |
+| **Profit** | settlement − cash given | **AED 29.00** |
 
-**Settlement** is what the card company actually pays back into your account:
-the cash the customer received **plus your share** of the commission — the
-company keeps its own share. So for the example above the company pays you
-**₹850**, and your profit on the deal is the ₹150 you kept. That ₹850 is the
-figure the dashboard and reports track as pending / received.
+**Margin** is the expected profit; **profit** is the real one. They differ
+whenever the bank rounds the deposit down, which is why the settlement figure
+is typed rather than assumed. A swipe stays *pending* until you enter it.
+
+The **supplier %** belongs to the card machine, not the entry — set it once on
+the machine and every swipe snapshots it, so re-rating a machine later never
+rewrites entries already in the book. The **customer %** is per swipe, and
+pre-fills from the customer you pick (or from your Profile default).
 
 Every derived amount is recalculated server-side on save *and* on edit, so the
-stored numbers can never drift from the inputs.
+stored numbers can never drift from the inputs. `npm run recalc` in `backend/`
+re-derives every row if the formula ever changes.
+
+---
+
+## How the cash flows
+
+A **loan** is cash a customer puts into the shop, so you have a float to hand
+out. It is money you owe back. The dashboard shows the total still owed, the
+money still sitting with the card company, and the cash you should have left.
+
+The **cash book** (`/cashbook`) is every movement in one ledger with a running
+balance:
+
+| Entry | Cash |
+| ----- | ---- |
+| Loan taken from a customer | **in** |
+| Repayment to that customer | out |
+| Cash handed over on a swipe | out |
+| Settlement from the card company | **in** |
+| Income | **in** |
+| Expense | out |
+
+A swipe therefore writes two lines: the cash going out on the day of the
+swipe, and the company's payment on the day it actually arrived.
 
 ---
 
@@ -138,12 +166,12 @@ stored numbers can never drift from the inputs.
 
 | Screen | What it does |
 | ------ | ------------ |
-| **Dashboard** | Today's transactions, cash given, commission, income and expenses; all-time settlement received vs pending; loans given vs outstanding; this month's totals; 5 most recent |
-| **Customers** | Add/edit customers with a per-customer commission % and type, assigned machine and status; search and filter |
-| **Card Machines** | Add/edit the machines you swipe on (name, card company, device id, status) |
-| **New Transaction** | Pick a machine (shown as tappable cards, first one pre-selected); optionally pick a saved customer (fills name/mobile/commission) or leave it as a walk-in; amount, type, split %, card ref, notes — with a live panel showing what the card company will pay you |
+| **Dashboard** | Total loan owed and money still with the card company across the top, plus cash in hand; today's swipes, cash given and margin; income and expenses; this month's totals; 5 most recent |
+| **Customers** | Add/edit customers - a name is all that is required - with the rate you charge them, assigned machine and status; search and filter |
+| **Card Machines** | Add/edit the machines you swipe on (name, card company, supplier %, device id, status) |
+| **New Transaction** | Pick a machine (tappable cards showing each supplier %, first pre-selected); optionally pick a saved customer or leave it a walk-in; one amount plus whether it includes commission or takes it on top, your %, the derived figure to round, card ref, notes — with a live panel showing swipe, charge, supplier fee, margin and supplier A/C |
 | **Income / Expenses** | Record other money in and out, by category (managed list) and receiver/payee; per-list totals |
-| **Loans** | Money lent out, with repayments tracked against each loan and a running outstanding balance |
+| **Loans** | Cash customers put into the shop, by customer, with repayments and a running outstanding balance; opens on a customer-wise settlement view |
 | **Categories** | Manage the income and expense category lists |
 | **More** | Hub linking Customers, Machines, Income, Expenses, Loans, Settlements, Categories and Profile |
 | **Transactions** | Search by mobile / txn no / card ref / amount, filter by status and date range, running totals for the filtered set, paginated |
@@ -151,8 +179,8 @@ stored numbers can never drift from the inputs.
 | **Pending Settlements** | Everything awaiting the card company, oldest first; multi-select to settle several at once |
 | **Daily Report** | Any date's totals plus that day's transactions |
 | **Monthly Report** | Month totals with a day-wise bar breakdown; tap a day to open its daily report |
-| **Commission Report** | Your share vs the card company's, split bar, grouped by rate and by type |
-| **Profile** | Name, shop name, default commission % and split %, change password, sign out |
+| **Margin Report** | What you charged vs what the supplier kept, split bar, grouped by your rate and by supplier rate |
+| **Profile** | Name, shop name, default charge to customer %, change password, sign out |
 
 All reports export to **Excel** and **PDF**.
 
@@ -190,7 +218,8 @@ auth cookie.
 | GET | `/reports/daily?date=YYYY-MM-DD` | Daily report |
 | GET | `/reports/weekly?date=YYYY-MM-DD` | Weekly report (Mon–Sun containing the date) |
 | GET | `/reports/monthly?month=YYYY-MM` | Monthly report + day-wise |
-| GET | `/reports/commission?month=YYYY-MM` | Commission report (by rate, type, customer, machine) |
+| GET | `/reports/commission?month=YYYY-MM` | Margin report (by customer rate, supplier rate, customer, machine) |
+| GET | `/cashbook?from=&to=` | Every entry in one ledger with a running balance |
 | GET | `/reports/customers?month=YYYY-MM` | Totals per customer |
 | GET | `/reports/machines?month=YYYY-MM` | Totals per machine |
 | GET | `/reports/settlement` | Pending settlements |
@@ -203,13 +232,13 @@ auth cookie.
 
 - **Transaction numbers** (`TXN-000001`) come from an atomic counter
   collection, so they stay unique under concurrent writes.
-- **Settlement amount** is what the card company pays back into your account:
-  the cash the customer received plus your share of the commission — the
-  company keeps its own share. "Pending" totals sum that figure across
-  unsettled transactions.
+- **Supplier A/C** is what the card company owes on a swipe (swiped less its
+  own fee). "Still with the card company" sums that across unsettled swipes.
+- **Settlement amount** is what it actually paid, typed in when the money
+  lands, and **profit** is that figure less the cash handed over.
 - **Report day boundaries** use the shop's own timezone (`REPORT_TZ` in
-  `backend/.env`, default `Asia/Kolkata`), not UTC, so "today" means your today.
-- **Money** is rounded to 2 decimals at every step, and the two commission
+  `backend/.env`, default `Asia/Dubai`), not UTC, so "today" means your today.
+- **Money** is rounded to 2 decimals at every step, and the charge and fee
   shares are derived by subtraction so they always sum to the total exactly.
 
 ---
@@ -225,7 +254,7 @@ auth cookie.
 | `JWT_SECRET` | *(change this)* | Token signing key |
 | `JWT_EXPIRES_IN` | `7d` | Session length |
 | `CLIENT_ORIGIN` | `http://localhost:3000` | Allowed CORS origin(s), comma-separated |
-| `REPORT_TZ` | `Asia/Kolkata` | Timezone for report day/month boundaries |
+| `REPORT_TZ` | `Asia/Dubai` | Timezone for report day/month boundaries |
 
 `frontend/.env.local`
 

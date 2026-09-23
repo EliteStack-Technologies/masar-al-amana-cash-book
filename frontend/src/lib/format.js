@@ -56,28 +56,74 @@ export const toLocalInput = (d) => {
   )}:${pad(dt.getMinutes())}`;
 };
 
+
 /**
- * Mirrors the server's computeAmounts() so the New Transaction form can show
- * a live preview before anything is saved.
+ * Mirrors the server's computeAmounts() so the swipe form can show a live
+ * preview before anything is saved. See backend/src/utils/calc.js for what
+ * commissionType means.
  */
 export const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
-export function preview({ requestedAmount, commissionPercent, commissionType, ownerSharePercent }) {
-  const requested = round2(requestedAmount || 0);
-  const commissionAmount = round2((requested * (Number(commissionPercent) || 0)) / 100);
-  const isIncluded = commissionType === 'included';
+const has = (v) => v !== undefined && v !== null && v !== '';
 
-  const customerReceived = isIncluded ? round2(requested - commissionAmount) : requested;
-  const cardAmount = isIncluded ? requested : round2(requested + commissionAmount);
-  const ownerCommission = round2((commissionAmount * (Number(ownerSharePercent) || 0)) / 100);
+export function preview({
+  swipedAmount,
+  givenAmount,
+  custPercent,
+  commissionType = 'included',
+  supplierPercent,
+}) {
+  const excluded = commissionType === 'excluded';
+  const supplierPct = Number(supplierPercent) || 0;
+
+  let swiped;
+  let given;
+  let chargeToCustomer;
+
+  if (has(swipedAmount) && has(givenAmount)) {
+    swiped = round2(swipedAmount);
+    given = round2(givenAmount);
+    chargeToCustomer = round2(swiped - given);
+  } else if (excluded) {
+    given = round2(givenAmount || 0);
+    chargeToCustomer = round2((given * (Number(custPercent) || 0)) / 100);
+    swiped = round2(given + chargeToCustomer);
+  } else {
+    swiped = round2(swipedAmount || 0);
+    chargeToCustomer = round2((swiped * (Number(custPercent) || 0)) / 100);
+    given = round2(swiped - chargeToCustomer);
+  }
+
+  const base = excluded ? given : swiped;
+  const supplierFee = round2((swiped * supplierPct) / 100);
 
   return {
-    commissionAmount,
-    customerReceived,
-    cardAmount,
-    ownerCommission,
-    companyCommission: round2(commissionAmount - ownerCommission),
-    // What the card company pays back to you: customer's cash + your share.
-    settlementAmount: round2(customerReceived + ownerCommission),
+    swipedAmount: swiped,
+    givenAmount: given,
+    chargeToCustomer,
+    custPercent: base ? round2((chargeToCustomer / base) * 100) : 0,
+    commissionType: excluded ? 'excluded' : 'included',
+    supplierPercent: round2(supplierPct),
+    supplierFee,
+    supplierAccount: round2(swiped - supplierFee),
+    margin: round2(chargeToCustomer - supplierFee),
   };
 }
+
+/**
+ * The other half of the deal: the figure the form derives from the amount the
+ * owner typed. Included -> the cash to hand over; excluded -> the swipe.
+ */
+export const counterFor = (amount, pct, commissionType) => {
+  const a = round2(amount || 0);
+  const charge = round2((a * (Number(pct) || 0)) / 100);
+  return commissionType === 'excluded' ? round2(a + charge) : round2(a - charge);
+};
+
+/** The rate implied when the owner rounds that derived figure by hand. */
+export const rateFor = (amount, counter, commissionType) => {
+  const a = round2(amount || 0);
+  if (!a) return 0;
+  const charge = commissionType === 'excluded' ? round2(counter - a) : round2(a - counter);
+  return round2((charge / a) * 100);
+};

@@ -30,6 +30,8 @@ export default function DashboardPage() {
         <LoadingState />
       ) : data ? (
         <div className="space-y-6 rise">
+          <TopLine loans={data.loans} settlement={data.settlement} cash={data.cash} />
+
           <Outstanding settlement={data.settlement} />
 
           <section>
@@ -39,23 +41,23 @@ export default function DashboardPage() {
                 <div className="border-r border-[var(--rule)] p-3.5">
                   <Figure
                     label="Cash out"
-                    value={money(data.today.customerReceived)}
+                    value={money(data.today.givenAmount)}
                     sub="handed to customers"
                   />
                 </div>
                 <div className="p-3.5">
                   <Figure
-                    label="Card in"
-                    value={money(data.today.cardAmount)}
-                    sub="swiped at the counter"
+                    label="Swiped"
+                    value={money(data.today.swipedAmount)}
+                    sub="taken on the machines"
                   />
                 </div>
               </div>
               <div className="ruled border-t border-[var(--rule)] px-3.5">
                 <Row
                   label="You earned"
-                  sub={`${data.today.count} ${data.today.count === 1 ? 'entry' : 'entries'} today`}
-                  value={data.today.ownerCommission}
+                  sub={`${data.today.count} ${data.today.count === 1 ? 'swipe' : 'swipes'} today`}
+                  value={data.today.margin}
                   tone="leaf"
                   strong
                 />
@@ -78,10 +80,10 @@ export default function DashboardPage() {
             <Card className="p-0">
               <div className="grid grid-cols-2">
                 <div className="border-r border-[var(--rule)] p-3.5">
-                  <Figure label="Given out" value={money(data.loans.given)} sub={`${data.loans.count} loans`} />
+                  <Figure label="Taken in" value={money(data.loans.taken)} sub={`${data.loans.count} loans`} />
                 </div>
                 <div className="p-3.5">
-                  <Figure label="Outstanding" value={money(data.loans.outstanding)} tone="stamp" sub={`${data.loans.openCount} still open`} />
+                  <Figure label="Still owed" value={money(data.loans.outstanding)} tone="stamp" sub={`${data.loans.openCount} still open`} />
                 </div>
               </div>
             </Card>
@@ -90,11 +92,11 @@ export default function DashboardPage() {
           <section>
             <SectionTitle>This month</SectionTitle>
             <Card className="ruled py-0">
-              <Row label="Card transactions" value={data.month.cardAmount} />
-              <Row label="Cash given out" value={data.month.customerReceived} />
-              <Row label="Commission charged" value={data.month.commissionAmount} />
-              <Row label="Your share" value={data.month.ownerCommission} tone="leaf" strong />
-              <Row label="Card company's share" value={data.month.companyCommission} />
+              <Row label="Swiped on cards" value={data.month.swipedAmount} />
+              <Row label="Cash given out" value={data.month.givenAmount} />
+              <Row label="Charged to customers" value={data.month.chargeToCustomer} />
+              <Row label="Supplier fee" value={data.month.supplierFee} tone="stamp" />
+              <Row label="Margin" value={data.month.margin} tone="leaf" strong />
             </Card>
           </section>
 
@@ -137,7 +139,49 @@ export default function DashboardPage() {
 }
 
 /**
- * The hero. In this business the owner fronts their own cash and waits for the
+ * The two running totals the owner checks first: the float the customers have
+ * put in, and the money the card company is still holding.
+ */
+function TopLine({ loans, settlement, cash }) {
+  return (
+    <section>
+      <Card className="p-0">
+        <div className="grid grid-cols-2">
+          <Link href="/loans" className="border-r border-[var(--rule)] p-3.5 active:bg-[var(--paper-2)]">
+            <Figure
+              label="Total loan"
+              value={money(loans.outstanding)}
+              size="lg"
+              sub={`from ${loans.openCount} open ${loans.openCount === 1 ? 'loan' : 'loans'}`}
+            />
+          </Link>
+          <Link href="/settlements" className="p-3.5 active:bg-[var(--paper-2)]">
+            <Figure
+              label="With the company"
+              value={money(settlement.pendingAmount)}
+              size="lg"
+              tone="stamp"
+              sub={`${settlement.pendingCount} to come back`}
+            />
+          </Link>
+        </div>
+        <Link
+          href="/cashbook"
+          className="flex items-center justify-between border-t border-[var(--rule)] px-3.5 py-3 active:bg-[var(--paper-2)]"
+        >
+          <span className="colhead">Cash in hand</span>
+          <span className="flex items-center gap-1.5">
+            <span className="sum text-[17px]">{money(cash.inHand)}</span>
+            <IconChevron size={14} />
+          </span>
+        </Link>
+      </Card>
+    </section>
+  );
+}
+
+/**
+ * The hero. In this business the owner fronts the cash and waits for the
  * card company, so the figure that matters most is what is still out.
  */
 function Outstanding({ settlement }) {
@@ -197,9 +241,9 @@ function RecentRow({ txn }) {
         </p>
       </div>
       <div className="shrink-0 text-right">
-        <p className="sum text-[15px]">{money(txn.cardAmount)}</p>
+        <p className="sum text-[15px]">{money(txn.swipedAmount)}</p>
         <p className="sum text-[11px] !font-semibold text-leaf-500 dark:text-leaf-400">
-          +{money(txn.ownerCommission)}
+          +{money(txn.profit == null ? txn.margin : txn.profit)}
         </p>
       </div>
     </Link>

@@ -15,15 +15,19 @@ import { computeAmounts } from './utils/calc.js';
  * that predates a required field still gets its maths corrected.
  */
 const DERIVED = [
-  'commissionAmount',
-  'customerReceived',
-  'cardAmount',
-  'ownerCommission',
-  'companyCommission',
-  'settlementAmount',
+  'givenAmount',
+  'chargeToCustomer',
+  'custPercent',
+  'supplierFee',
+  'supplierAccount',
+  'margin',
+  'profit',
 ];
 
-const drifted = (a, b) => Math.abs(Number(a) - Number(b)) > 0.009;
+const drifted = (a, b) => {
+  if (a === null || a === undefined || b === null || b === undefined) return a !== b;
+  return Math.abs(Number(a) - Number(b)) > 0.009;
+};
 
 async function run() {
   const apply = process.argv.includes('--apply');

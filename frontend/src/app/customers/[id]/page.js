@@ -44,7 +44,7 @@ export default function CustomerDetailPage() {
           <Card className="ruled py-0">
             <Row label="Name" value={customer.name} isMoney={false} />
             <Row label="Mobile" value={customer.mobile} isMoney={false} />
-            <Row label="Commission" value={`${customer.commissionPercent}% · ${customer.commissionType}`} isMoney={false} />
+            <Row label="Charge to customer" value={`${customer.commissionPercent}%`} isMoney={false} />
             <Row label="Machine" value={customer.machine?.name || '—'} isMoney={false} />
             <Row label="Status" value={customer.status === 'active' ? 'Active' : 'Inactive'} isMoney={false} />
             {customer.notes ? <Row label="Notes" value={customer.notes} isMoney={false} /> : null}

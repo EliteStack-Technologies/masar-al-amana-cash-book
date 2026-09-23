@@ -6,14 +6,17 @@ const loanSchema = new mongoose.Schema(
     shopOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     loanNumber: { type: String, unique: true, index: true },
 
-    borrowerName: { type: String, required: true, trim: true, index: true },
-    borrowerMobile: { type: String, default: '', trim: true },
+    // Who put the cash in. Chosen from the customer list; the name is
+    // snapshotted so renaming a customer never rewrites loan history.
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null, index: true },
+    lenderName: { type: String, required: true, trim: true, index: true },
+    lenderMobile: { type: String, default: '', trim: true },
     principal: { type: Number, required: true, min: 0 },
     entryDate: { type: Date, default: Date.now, index: true },
     notes: { type: String, default: '', trim: true },
 
-    // Kept in step by the settlement controller so lists and the dashboard can
-    // read the outstanding balance without a per-loan aggregation.
+    // Repaid to the lender. Kept in step by the loan controller so lists and
+    // the dashboard can read the outstanding balance without an aggregation.
     settledAmount: { type: Number, default: 0, min: 0 },
     status: { type: String, enum: ['open', 'closed'], default: 'open', index: true },
 

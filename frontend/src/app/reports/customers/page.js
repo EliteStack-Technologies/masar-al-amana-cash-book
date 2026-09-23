@@ -41,11 +41,11 @@ export default function CustomerReportPage() {
                         <p className="truncate text-[14px] font-semibold">{c.customerName || c.customerMobile}</p>
                         <p className="ref mt-0.5 text-[10.5px] muted-2">{c.customerMobile} · {c.count} entries</p>
                       </div>
-                      <p className="sum text-[15px]">{money(c.cardAmount)}</p>
+                      <p className="sum text-[15px]">{money(c.swipedAmount)}</p>
                     </div>
                     <div className="mt-2 flex justify-between border-t border-[var(--rule)] pt-2 text-[12px]">
-                      <span className="muted">Commission {money(c.commissionAmount)}</span>
-                      <span className="sum text-leaf-500 dark:text-leaf-400">Yours {money(c.ownerCommission)}</span>
+                      <span className="muted">Charged {money(c.chargeToCustomer)}</span>
+                      <span className="sum text-leaf-500 dark:text-leaf-400">Margin {money(c.margin)}</span>
                     </div>
                   </Card>
                 ))}

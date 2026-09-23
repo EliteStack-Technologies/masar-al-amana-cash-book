@@ -11,15 +11,20 @@ import {
 
 const TABS = [
   { href: '/dashboard', label: 'Book', icon: IconHome },
-  { href: '/transactions', label: 'Entries', icon: IconList },
+  { href: '/cashbook', label: 'Cash book', icon: IconList },
   { href: '/transactions/new', label: 'Enter', icon: IconPlus, stamp: true },
   { href: '/reports', label: 'Reports', icon: IconChart },
   { href: '/more', label: 'More', icon: IconGrid },
 ];
 
 const isActive = (pathname, href) => {
-  if (href === '/transactions') {
-    return pathname === '/transactions' || /^\/transactions\/(?!new)/.test(pathname);
+  if (href === '/cashbook') {
+    // Swipe entries hang off the cash book now, so they light the same tab.
+    return (
+      pathname === '/cashbook' ||
+      pathname === '/transactions' ||
+      /^\/transactions\/(?!new)/.test(pathname)
+    );
   }
   if (href === '/more') {
     // The More hub is the home for these sections, so light it up on all of them.

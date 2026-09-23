@@ -41,11 +41,11 @@ export default function MachineReportPage() {
                         <p className="truncate text-[14px] font-semibold">{m.machineName}</p>
                         <p className="ref mt-0.5 text-[10.5px] muted-2">{m.cardCompany || '—'} · {m.count} entries</p>
                       </div>
-                      <p className="sum text-[15px]">{money(m.cardAmount)}</p>
+                      <p className="sum text-[15px]">{money(m.swipedAmount)}</p>
                     </div>
                     <div className="mt-2 flex justify-between border-t border-[var(--rule)] pt-2 text-[12px]">
-                      <span className="muted">Commission {money(m.commissionAmount)}</span>
-                      <span className="sum text-leaf-500 dark:text-leaf-400">Yours {money(m.ownerCommission)}</span>
+                      <span className="muted">Charged {money(m.chargeToCustomer)}</span>
+                      <span className="sum text-leaf-500 dark:text-leaf-400">Margin {money(m.margin)}</span>
                     </div>
                   </Card>
                 ))}

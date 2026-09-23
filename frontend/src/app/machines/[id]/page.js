@@ -44,6 +44,12 @@ export default function MachineDetailPage() {
           <Card className="ruled py-0">
             <Row label="Name" value={machine.name} isMoney={false} />
             <Row label="Card company" value={machine.cardCompany || '—'} isMoney={false} />
+            <Row
+              label="Supplier %"
+              sub="Taken off every swipe on this machine"
+              value={machine.supplierPercent ? `${machine.supplierPercent}%` : 'Not set'}
+              isMoney={false}
+            />
             <Row label="Device ID" value={machine.deviceId || '—'} isMoney={false} />
             <Row label="Status" value={machine.status === 'active' ? 'Active' : 'Inactive'} isMoney={false} />
             {machine.notes ? <Row label="Notes" value={machine.notes} isMoney={false} /> : null}

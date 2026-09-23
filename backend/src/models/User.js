@@ -13,9 +13,8 @@ const userSchema = new mongoose.Schema(
     },
     passwordHash: { type: String, required: true },
     shopName: { type: String, default: 'My Shop', trim: true },
-    // Prefilled on the new-transaction form so the owner rarely retypes them.
-    defaultCommissionPercent: { type: Number, default: 30, min: 0, max: 100 },
-    defaultOwnerSharePercent: { type: Number, default: 50, min: 0, max: 100 },
+    // Prefills the customer's rate on the new-transaction form.
+    defaultCommissionPercent: { type: Number, default: 3, min: 0, max: 100 },
   },
   { timestamps: true }
 );
@@ -35,7 +34,6 @@ userSchema.methods.toSafeJSON = function () {
     email: this.email,
     shopName: this.shopName,
     defaultCommissionPercent: this.defaultCommissionPercent,
-    defaultOwnerSharePercent: this.defaultOwnerSharePercent,
   };
 };
 
