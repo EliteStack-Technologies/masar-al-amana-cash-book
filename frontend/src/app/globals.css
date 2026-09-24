@@ -208,6 +208,27 @@ textarea.field:focus {
   outline: none;
 }
 
+/* iOS Safari gives date/time inputs a built-in minimum width and its own
+   control styling, so two side by side (From / To) spill past the screen.
+   Let them shrink to their column, keep our field look, and left-align the
+   value the way every other field reads. */
+input.field[type='date'],
+input.field[type='month'],
+input.field[type='time'],
+input.field[type='datetime-local'] {
+  min-width: 0;
+  max-width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  min-height: 2.9rem;
+}
+
+input.field::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
 /* Status marks are soft tinted pills now, not rubber stamps. */
 @utility stamp-mark {
   display: inline-flex;

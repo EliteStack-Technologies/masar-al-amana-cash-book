@@ -5,41 +5,40 @@ import { api } from '@/lib/api';
 import { toLocalInput } from '@/lib/format';
 import { Button, Card, ErrorNote, Field, SectionTitle, Skeleton } from '@/components/ui';
 
-export const emptyLoan = () => ({
+export const emptyCapital = () => ({
   account: '',
-  lenderName: '',
-  lenderMobile: '',
-  principal: '',
+  partnerName: '',
+  partnerMobile: '',
+  amount: '',
   entryDate: toLocalInput(),
   notes: '',
 });
 
-export const toLoanValues = (l) => ({
-  account: l.account?._id || l.account || '',
-  lenderName: l.lenderName || '',
-  lenderMobile: l.lenderMobile || '',
-  principal: String(l.principal ?? ''),
-  entryDate: toLocalInput(l.entryDate),
-  notes: l.notes || '',
+export const toCapitalValues = (c) => ({
+  account: c.account?._id || c.account || '',
+  partnerName: c.partnerName || '',
+  partnerMobile: c.partnerMobile || '',
+  amount: String(c.amount ?? ''),
+  entryDate: toLocalInput(c.entryDate),
+  notes: c.notes || '',
 });
 
 /**
- * Cash an account holder puts into the shop. Pick the account it came from and
- * type the amount - that is the whole form. A name that is not on the list
- * yet opens a new loan account when the loan is saved. Loan accounts are their
- * own list; swipe customers never appear here.
+ * Capital an owner or partner puts into the shop. Pick the account it came
+ * from and type the amount. A name that is not on the list yet opens a new
+ * capital account when the entry is saved.
  */
-export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }) {
+export function CapitalForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }) {
   const [form, setForm] = useState(initial);
   const [accounts, setAccounts] = useState(null);
-  const [adding, setAdding] = useState(!initial.account && !!initial.lenderName);
+  const [adding, setAdding] = useState(!initial.account && !!initial.partnerName);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
   useEffect(() => {
-    api('/loans/accounts')
+    api('/capital/accounts')
       .then((d) => setAccounts(d.items))
       .catch((err) => setError(err.message));
   }, []);
@@ -48,7 +47,7 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
     const value = e.target.value;
     if (value === '__new') {
       setAdding(true);
-      setForm((f) => ({ ...f, account: '', lenderName: '', lenderMobile: '' }));
+      setForm((f) => ({ ...f, account: '', partnerName: '', partnerMobile: '' }));
       return;
     }
     setAdding(false);
@@ -56,26 +55,26 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
     setForm((f) => ({
       ...f,
       account: value,
-      lenderName: acc?.name || '',
-      lenderMobile: acc?.mobile || '',
+      partnerName: acc?.name || '',
+      partnerMobile: acc?.mobile || '',
     }));
   };
 
   const submit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!form.account && !form.lenderName.trim()) {
+    if (!form.account && !form.partnerName.trim()) {
       return setError('Choose an account, or type a name for a new one.');
     }
-    if (!(Number(form.principal) > 0)) return setError('Loan amount must be greater than 0.');
+    if (!(Number(form.amount) > 0)) return setError('Capital amount must be greater than 0.');
 
     setBusy(true);
     try {
       await onSubmit({
         account: form.account || null,
-        lenderName: form.lenderName.trim(),
-        lenderMobile: form.lenderMobile.trim(),
-        principal: Number(form.principal),
+        partnerName: form.partnerName.trim(),
+        partnerMobile: form.partnerMobile.trim(),
+        amount: Number(form.amount),
         entryDate: new Date(form.entryDate).toISOString(),
         notes: form.notes,
       });
@@ -90,7 +89,7 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
   return (
     <form onSubmit={submit} className="space-y-5 rise">
       <section>
-        <SectionTitle>Who gave the cash</SectionTitle>
+        <SectionTitle>Who put the capital in</SectionTitle>
         <Card className="space-y-3.5">
           <Field label="Account name">
             <select className="field" value={adding ? '__new' : form.account} onChange={pick}>
@@ -104,13 +103,13 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
 
           {adding ? (
             <>
-              <Field label="New account name" hint="Saved to your loan accounts">
+              <Field label="New account name" hint="Saved to your capital accounts">
                 <input
                   className="field"
                   type="text"
                   placeholder="e.g. Rashid"
-                  value={form.lenderName}
-                  onChange={set('lenderName')}
+                  value={form.partnerName}
+                  onChange={set('partnerName')}
                   autoFocus
                   required
                 />
@@ -121,8 +120,8 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
                   type="tel"
                   inputMode="numeric"
                   placeholder="05x xxx xxxx"
-                  value={form.lenderMobile}
-                  onChange={set('lenderMobile')}
+                  value={form.partnerMobile}
+                  onChange={set('partnerMobile')}
                 />
               </Field>
             </>
@@ -133,7 +132,7 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
       <section>
         <SectionTitle>Amount</SectionTitle>
         <Card className="space-y-3.5">
-          <Field label="Loan amount">
+          <Field label="Capital amount">
             <div className="relative">
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 sum text-[12.5px] muted-2">
                 AED
@@ -145,8 +144,8 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
                 min="0"
                 step="0.01"
                 placeholder="0.00"
-                value={form.principal}
-                onChange={set('principal')}
+                value={form.amount}
+                onChange={set('amount')}
                 required
               />
             </div>

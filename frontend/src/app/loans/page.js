@@ -7,6 +7,7 @@ import { api, qs, downloadUrl } from '@/lib/api';
 import { money, dateOnly } from '@/lib/format';
 import { Button, Card, Empty, ErrorNote, Figure, SectionTitle, Segmented, Skeleton } from '@/components/ui';
 import { IconHand, IconChevron, IconPlus, IconDownload } from '@/components/Icons';
+import { Pager, usePageFor } from '@/components/Pager';
 
 const STATUS = [
   { value: '', label: 'All' },
@@ -24,14 +25,19 @@ export default function LoansPage() {
   const [view, setView] = useState('account');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [page, setPage] = usePageFor(status);
 
   useEffect(() => {
+    let alive = true;
     setData(null);
     setError('');
-    api(`/loans${qs({ status })}`)
-      .then(setData)
-      .catch((err) => setError(err.message));
-  }, [status]);
+    api(`/loans${qs({ status, page })}`)
+      .then((d) => alive && setData(d))
+      .catch((err) => alive && setError(err.message));
+    return () => {
+      alive = false;
+    };
+  }, [status, page]);
 
   return (
     <AppShell
@@ -109,6 +115,8 @@ export default function LoansPage() {
                 </Link>
               ))}
             </div>
+
+            <Pager page={data.page} pages={data.pages} total={data.total} noun="loans" onChange={setPage} />
           </div>
         ) : (
           <Empty

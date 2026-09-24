@@ -5,7 +5,7 @@ import { AppShell } from '@/components/AppShell';
 import { useAuth } from '@/components/AuthProvider';
 import {
   IconUsers, IconMachine, IconArrowUp, IconArrowDown, IconHand, IconList,
-  IconClock, IconTag, IconUser, IconChevron, IconLogout,
+  IconClock, IconTag, IconUser, IconChevron, IconLogout, IconWallet, IconCash,
 } from '@/components/Icons';
 
 const GROUPS = [
@@ -13,11 +13,13 @@ const GROUPS = [
   {
     title: 'Money in & out',
     items: [
+      { href: '/opening', icon: IconCash, title: 'Opening balance', detail: 'Cash already in the drawer when the book starts' },
       { href: '/income', icon: IconArrowUp, title: 'Income', detail: 'Other money the shop receives' },
       { href: '/expenses', icon: IconArrowDown, title: 'Expenses', detail: 'Rent, salary, bills and more' },
       { href: '/transactions', icon: IconList, title: 'All swipes', detail: 'Every card entry in the book' },
+      { href: '/capital', icon: IconWallet, title: 'Capital', detail: 'Money put in by owners or partners, and withdrawals' },
       { href: '/loans', icon: IconHand, title: 'Loans', detail: 'Cash put in by loan accounts, and repayments' },
-      { href: '/settlements', icon: IconClock, title: 'Pending settlements', detail: 'Card money still to come in' },
+      { href: '/settlements', icon: IconClock, title: 'Vendor settlement', detail: 'Machine-wise settlement and ledger with the card company' },
     ],
   },
     {
@@ -31,7 +33,7 @@ const GROUPS = [
     title: 'Setup',
     items: [
       { href: '/categories', icon: IconTag, title: 'Categories', detail: 'Manage income & expense categories' },
-      { href: '/profile', icon: IconUser, title: 'Profile', detail: 'Shop details, defaults, password' },
+      { href: '/profile', icon: IconUser, title: 'Profile', detail: 'Your name, shop name, password' },
     ],
   },
 ];

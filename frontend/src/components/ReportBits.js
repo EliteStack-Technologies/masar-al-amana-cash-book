@@ -1,7 +1,32 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { money } from '@/lib/format';
-import { Card, Figure, Row, SectionTitle, SplitRail } from '@/components/ui';
+import { Card, Figure, Row, SectionTitle, Segmented, SplitRail } from '@/components/ui';
+
+const PERIODS = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
+/**
+ * Daily / Weekly / Monthly switch at the top of the period reports. The day
+ * being looked at is carried across, so switching shows the week or month
+ * that holds it.
+ */
+export function PeriodTabs({ current, date }) {
+  const router = useRouter();
+  return (
+    <Segmented
+      value={current}
+      options={PERIODS}
+      onChange={(period) => {
+        if (period !== current) router.replace(`/reports/${period}?date=${date}`);
+      }}
+    />
+  );
+}
 
 /** The headline figures every report shares, set as a ruled block. */
 export function ReportHeadline({ summary }) {

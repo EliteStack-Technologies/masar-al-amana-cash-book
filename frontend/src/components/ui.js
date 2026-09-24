@@ -65,7 +65,9 @@ export function Spinner({ size = 20, className }) {
 
 export function Field({ label, hint, error, children, className }) {
   return (
-    <label className={cx('block', className)}>
+    // min-w-0: in a two-column grid a field may shrink to its column instead
+    // of being held open by its input (iOS date inputs especially).
+    <label className={cx('block min-w-0', className)}>
       <span className="colhead mb-1.5 block">{label}</span>
       {children}
       {hint && !error && <span className="mt-1 block text-[11px] muted-2">{hint}</span>}

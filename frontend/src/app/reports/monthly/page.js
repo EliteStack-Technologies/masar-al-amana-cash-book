@@ -1,17 +1,35 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
-import { thisMonthInput, money, moneyShort } from '@/lib/format';
+import { thisMonthInput, todayInput, money, moneyShort } from '@/lib/format';
 import { Card, Empty, ErrorNote, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
-import { PeriodPicker, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
+import { PeriodPicker, PeriodTabs, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
 import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconChart, IconChevron } from '@/components/Icons';
 
 export default function MonthlyReportPage() {
-  const [month, setMonth] = useState(thisMonthInput());
+  // useSearchParams needs a Suspense boundary above it during prerender.
+  return (
+    <Suspense fallback={<AppShell title="One month" back><Skeleton className="h-[180px]" /></AppShell>}>
+      <MonthlyReport />
+    </Suspense>
+  );
+}
+
+/**
+ * The day handed to the daily and weekly tabs: today while looking at this
+ * month, otherwise the 1st of the month on screen.
+ */
+const dayInMonth = (month) => (month === thisMonthInput() ? todayInput() : `${month}-01`);
+
+function MonthlyReport() {
+  // The Daily and Weekly tabs link here with ?date=YYYY-MM-DD.
+  const initialDate = useSearchParams().get('date');
+  const [month, setMonth] = useState(initialDate ? initialDate.slice(0, 7) : thisMonthInput());
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
 
@@ -39,6 +57,7 @@ export default function MonthlyReportPage() {
       action={<DownloadMenu params={{ type: 'monthly', month }} copies={PERIOD_COPIES} />}
     >
       <div className="space-y-5">
+        <PeriodTabs current="monthly" date={dayInMonth(month)} />
         <PeriodPicker type="month" label="Month" value={month} onChange={setMonth} />
 
         <ErrorNote>{error}</ErrorNote>

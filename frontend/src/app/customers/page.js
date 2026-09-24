@@ -6,6 +6,9 @@ import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
 import { Button, Empty, ErrorNote, Segmented, Skeleton, StatusPill } from '@/components/ui';
 import { IconUsers, IconSearch, IconChevron, IconPlus } from '@/components/Icons';
+import { Pager, usePageFor } from '@/components/Pager';
+
+const PAGE_SIZE = 30;
 
 const STATUS = [
   { value: '', label: 'All' },
@@ -17,8 +20,10 @@ export default function CustomersPage() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
-  const [items, setItems] = useState(null);
+  const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [page, setPage] = usePageFor([debouncedQ, status]);
+  const items = data?.items || null;
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
@@ -26,17 +31,21 @@ export default function CustomersPage() {
   }, [q]);
 
   useEffect(() => {
-    setItems(null);
+    let alive = true;
+    setData(null);
     setError('');
-    api(`/customers${qs({ q: debouncedQ, status })}`)
-      .then((d) => setItems(d.items))
-      .catch((err) => setError(err.message));
-  }, [debouncedQ, status]);
+    api(`/customers${qs({ q: debouncedQ, status, page, limit: PAGE_SIZE })}`)
+      .then((d) => alive && setData(d))
+      .catch((err) => alive && setError(err.message));
+    return () => {
+      alive = false;
+    };
+  }, [debouncedQ, status, page]);
 
   return (
     <AppShell
       title="Customers"
-      subtitle={items ? `${items.length} shown` : 'Loading…'}
+      subtitle={data ? `${data.total} ${data.total === 1 ? 'customer' : 'customers'}` : 'Loading…'}
       action={
         <Link href="/customers/new" aria-label="Add customer" className="flex size-9 items-center justify-center border border-[var(--rule-strong)] active:bg-[var(--paper-2)]">
           <IconPlus size={18} />
@@ -55,19 +64,22 @@ export default function CustomersPage() {
         {!items && !error ? (
           <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[64px]" />)}</div>
         ) : items && items.length ? (
-          <div className="card ruled py-0">
-            {items.map((c) => (
-              <Link key={c._id} href={`/customers/${c._id}`} className="flex items-center gap-3 px-3.5 py-3 active:bg-[var(--paper-2)]">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-[14px] font-semibold">{c.name}</p>
-                    {c.status === 'inactive' && <span className="stamp-mark muted-2">Inactive</span>}
+          <div className="space-y-4">
+            <div className="card ruled py-0">
+              {items.map((c) => (
+                <Link key={c._id} href={`/customers/${c._id}`} className="flex items-center gap-3 px-3.5 py-3 active:bg-[var(--paper-2)]">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate text-[14px] font-semibold">{c.name}</p>
+                      {c.status === 'inactive' && <span className="stamp-mark muted-2">Inactive</span>}
+                    </div>
+                    <p className="ref mt-0.5 text-[10.5px] muted-2">{c.mobile || 'No mobile'}</p>
                   </div>
-                  <p className="ref mt-0.5 text-[10.5px] muted-2">{c.mobile || 'No mobile'}</p>
-                </div>
-                <span className="muted-2"><IconChevron size={16} /></span>
-              </Link>
-            ))}
+                  <span className="muted-2"><IconChevron size={16} /></span>
+                </Link>
+              ))}
+            </div>
+            <Pager page={data.page} pages={data.pages} total={data.total} noun="customers" onChange={setPage} />
           </div>
         ) : (
           <Empty
