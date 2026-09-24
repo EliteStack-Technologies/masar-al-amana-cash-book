@@ -7,9 +7,10 @@ import { TransactionCard } from '@/components/TransactionCard';
 import { api, qs } from '@/lib/api';
 import { todayInput, dateOnly, dateTime, money } from '@/lib/format';
 import { Button, Card, ErrorNote, Field, Row, SectionTitle, Skeleton, Empty, StatusPill } from '@/components/ui';
-import { PeriodPicker, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
+import { PeriodPicker, PeriodTabs, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
 import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconList, IconCheck, IconClock } from '@/components/Icons';
+import { Pager, usePaged } from '@/components/Pager';
 
 export default function DailyReportPage() {
   // useSearchParams needs a Suspense boundary above it during prerender.
@@ -42,6 +43,8 @@ function DailyReport() {
     };
   }, [date, reload]);
 
+  const txnPage = usePaged(data?.transactions, 20, date);
+
   return (
     <AppShell
       title="One day"
@@ -50,6 +53,7 @@ function DailyReport() {
       action={<DownloadMenu params={{ type: 'daily', date }} copies={PERIOD_COPIES} />}
     >
       <div className="space-y-5">
+        <PeriodTabs current="daily" date={date} />
         <PeriodPicker type="date" label="Date" value={date} onChange={setDate} />
 
         <ErrorNote>{error}</ErrorNote>
@@ -88,9 +92,10 @@ function DailyReport() {
               <SectionTitle>{data.transactions.length} {data.transactions.length === 1 ? 'entry' : 'entries'}</SectionTitle>
               {data.transactions.length ? (
                 <div className="space-y-2">
-                  {data.transactions.map((t) => (
+                  {txnPage.pageItems.map((t) => (
                     <TransactionCard key={t._id} txn={t} />
                   ))}
+                  <Pager className="pt-2" page={txnPage.page} pages={txnPage.pages} total={txnPage.total} onChange={txnPage.setPage} />
                 </div>
               ) : (
                 <Empty

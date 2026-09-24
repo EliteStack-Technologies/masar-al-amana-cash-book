@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { todayInput } from '@/lib/format';
+import { toLocalInput } from '@/lib/format';
 import { Button, Card, ErrorNote, Field, SectionTitle } from '@/components/ui';
 
 export const emptyEntry = () => ({
-  entryDate: todayInput(),
+  entryDate: toLocalInput(),
   amount: '',
   category: '',
   party: '',
@@ -15,7 +15,7 @@ export const emptyEntry = () => ({
 
 // `party` maps to `receiver` for income and `payee` for expenses.
 export const toEntryValues = (e, kind) => ({
-  entryDate: (e.entryDate ? new Date(e.entryDate) : new Date()).toISOString().slice(0, 10),
+  entryDate: toLocalInput(e.entryDate),
   amount: String(e.amount ?? ''),
   category: e.category || '',
   party: (kind === 'income' ? e.receiver : e.payee) || '',
@@ -28,7 +28,7 @@ export const toEntryValues = (e, kind) => ({
  */
 export function MoneyEntryForm({ kind, initial, submitLabel, busyLabel, onSubmit, onCancel }) {
   const [form, setForm] = useState(initial);
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -49,7 +49,7 @@ export function MoneyEntryForm({ kind, initial, submitLabel, busyLabel, onSubmit
     setBusy(true);
     try {
       const payload = {
-        entryDate: new Date(`${form.entryDate}T12:00:00`).toISOString(),
+        entryDate: new Date(form.entryDate).toISOString(),
         amount: Number(form.amount),
         category: form.category.trim(),
         notes: form.notes,
@@ -74,19 +74,28 @@ export function MoneyEntryForm({ kind, initial, submitLabel, busyLabel, onSubmit
             </div>
           </Field>
 
-          <Field label="Category">
-            <input className="field" list={`cat-${kind}`} placeholder="e.g. Rent" value={form.category} onChange={set('category')} />
-            <datalist id={`cat-${kind}`}>
-              {categories.map((c) => <option key={c._id} value={c.name} />)}
-            </datalist>
+          <Field
+            label="Category"
+            hint={categories && !categories.length ? `No ${kind} categories yet - add them under Categories` : undefined}
+          >
+            <select className="field" value={form.category} onChange={set('category')} disabled={!categories}>
+              <option value="">{categories ? 'Choose a category' : 'Loading…'}</option>
+              {(categories || []).map((c) => (
+                <option key={c._id} value={c.name}>{c.name}</option>
+              ))}
+              {/* An older entry may use a name that is no longer in the list. */}
+              {form.category && categories && !categories.some((c) => c.name === form.category) && (
+                <option value={form.category}>{form.category}</option>
+              )}
+            </select>
           </Field>
 
           <Field label={partyLabel} hint="Optional">
             <input className="field" type="text" placeholder={kind === 'income' ? 'e.g. ABC' : 'e.g. Landlord'} value={form.party} onChange={set('party')} />
           </Field>
 
-          <Field label="Date">
-            <input className="field" type="date" value={form.entryDate} onChange={set('entryDate')} required />
+          <Field label="Date & time">
+            <input className="field" type="datetime-local" value={form.entryDate} onChange={set('entryDate')} required />
           </Field>
 
           <Field label="Notes" hint="Optional">

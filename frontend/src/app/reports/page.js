@@ -4,39 +4,15 @@ import Link from 'next/link';
 import { AppShell } from '@/components/AppShell';
 
 import {
-  IconCalendar, IconChart, IconPercent, IconChevron, IconClock, IconUsers, IconMachine,
+  IconCalendar, IconChevron, IconClock, IconMachine,
 } from '@/components/Icons';
 
 const REPORTS = [
   {
     href: '/reports/daily',
     icon: IconCalendar,
-    title: 'Daily',
-    detail: 'Any single day — transactions, income, expenses, loans',
-  },
-  {
-    href: '/reports/weekly',
-    icon: IconCalendar,
-    title: 'Weekly',
-    detail: 'Mon–Sun, day by day',
-  },
-  {
-    href: '/reports/monthly',
-    icon: IconChart,
-    title: 'Monthly',
-    detail: 'A month, broken down day by day',
-  },
-  {
-    href: '/reports/commission',
-    icon: IconPercent,
-    title: 'Commission',
-    detail: 'Your share vs the card company, by rate & customer',
-  },
-  {
-    href: '/reports/customers',
-    icon: IconUsers,
-    title: 'Customer report',
-    detail: 'Totals per customer',
+    title: 'Period report',
+    detail: 'Daily, weekly or monthly — switch at the top of the report',
   },
   {
     href: '/reports/machines',
@@ -47,8 +23,8 @@ const REPORTS = [
   {
     href: '/settlements',
     icon: IconClock,
-    title: 'Money owed',
-    detail: 'Everything still to come back in',
+    title: 'Vendor settlement',
+    detail: 'Machine-wise settlement and ledger with the card company',
   },
 ];
 

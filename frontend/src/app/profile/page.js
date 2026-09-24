@@ -13,8 +13,6 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState({
     name: user?.name || '',
     shopName: user?.shopName || '',
-    defaultCommissionPercent: String(user?.defaultCommissionPercent ?? 2.9),
-    defaultOwnerSharePercent: String(user?.defaultOwnerSharePercent ?? 50),
   });
   const [profileMsg, setProfileMsg] = useState('');
   const [profileErr, setProfileErr] = useState('');
@@ -33,11 +31,7 @@ export default function ProfilePage() {
     try {
       const { user: updated } = await api('/auth/profile', {
         method: 'PATCH',
-        body: {
-          ...profile,
-          defaultCommissionPercent: Number(profile.defaultCommissionPercent),
-          defaultOwnerSharePercent: Number(profile.defaultOwnerSharePercent),
-        },
+        body: profile,
       });
       setUser(updated);
       setProfileMsg('Details saved.');
@@ -102,37 +96,6 @@ export default function ProfilePage() {
                 onChange={(e) => setProfile((p) => ({ ...p, shopName: e.target.value }))}
               />
             </Field>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Default charge to customer %" hint="Fills in on a new swipe">
-                <input
-                  className="field ref"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={profile.defaultCommissionPercent}
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, defaultCommissionPercent: e.target.value }))
-                  }
-                />
-              </Field>
-              <Field label="Default my share %" hint="The rest goes to the card company">
-                <input
-                  className="field ref"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={profile.defaultOwnerSharePercent}
-                  onChange={(e) =>
-                    setProfile((p) => ({ ...p, defaultOwnerSharePercent: e.target.value }))
-                  }
-                />
-              </Field>
-            </div>
 
             <ErrorNote>{profileErr}</ErrorNote>
             {profileMsg && (

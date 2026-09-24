@@ -9,6 +9,32 @@ import { Button, Card, ErrorNote, Field, Row, SectionTitle, Skeleton, cx } from 
 const QUICK_AMOUNTS = [1000, 2000, 5000, 10000];
 
 /**
+ * DISPLAY ONLY - the "Pay to customer" box. The exact cash left once the
+ * rate comes out of the swipe, rounded down to a whole dirham:
+ * 1,002 @ 2.9% -> 972.94 -> shows 972. Nothing saved or calculated uses this;
+ * the entry itself still follows the shop's rule in lib/format.js.
+ * Worked in whole fils and rate units so 971.00 never reads as 970.99.
+ */
+const payShown = (swipedAmount, custPercent) => {
+  const swipeFils = Math.round((Number(swipedAmount) || 0) * 100);
+  const rateUnits = Math.round((Number(custPercent) || 0) * 10000); // 1,000,000 = 100%
+  return Math.floor((swipeFils * (1000000 - rateUnits)) / 100000000);
+};
+
+const exactFmt = new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+
+/**
+ * DISPLAY ONLY - the charge exactly as the rate gives it, before the shop
+ * rounds it to a whole dirham: 1,002 @ 2.9% -> "AED 29.058". Shown in the
+ * working; what is saved is still the rounded charge.
+ */
+const chargeShown = (swipedAmount, custPercent) => {
+  const swipeFils = Math.round((Number(swipedAmount) || 0) * 100);
+  const rateUnits = Math.round((Number(custPercent) || 0) * 10000);
+  return `AED ${exactFmt.format((swipeFils * rateUnits) / 100000000)}`;
+};
+
+/**
  * The form works in one typed `amount` plus the mode that says which end of
  * the deal it is, and one derived `counter` amount the owner can round by
  * hand. Which of swiped/given each one is depends on the mode.
@@ -48,6 +74,9 @@ export const toFormValues = (t) => {
     cardRefNumber: t.cardRefNumber || '',
     notes: t.notes || '',
     txnDate: toLocalInput(t.txnDate),
+    // The rate this swipe was actually charged at. Only an edit carries it:
+    // a new entry always takes the machine's rate.
+    supplierPercent: String(t.supplierPercent ?? ''),
   };
 };
 
@@ -80,7 +109,18 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
   }, []);
 
   const machine = machines?.find((m) => m._id === form.machine) || null;
-  const supplierPercent = machine?.supplierPercent || 0;
+  // Editing a saved swipe: its supplier % can be corrected when the card
+  // company charged a different rate from the machine's usual one.
+  const editing = initial.supplierPercent !== undefined;
+  const supplierPercent = editing ? Number(form.supplierPercent) || 0 : machine?.supplierPercent || 0;
+
+  /** A different machine brings its own rate; it can still be corrected after. */
+  const pickMachine = (m) =>
+    setForm((f) =>
+      f.machine === m._id
+        ? f
+        : { ...f, machine: m._id, ...(editing ? { supplierPercent: String(m.supplierPercent || 0) } : {}) }
+    );
 
   const excluded = form.commissionType === 'excluded';
 
@@ -150,12 +190,15 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
     if (!(Number(form.amount) > 0)) {
       return setError(
         excluded
-          ? 'Enter the cash to hand over, greater than 0.'
+          ? 'Enter the amount to pay the customer, greater than 0.'
           : 'Enter a swiped amount greater than 0.'
       );
     }
     if (calc.givenAmount > calc.swipedAmount) {
       return setError('The cash given cannot be more than the amount swiped.');
+    }
+    if (editing && !(Number(form.supplierPercent) >= 0 && Number(form.supplierPercent) <= 100)) {
+      return setError('Supplier % must be between 0 and 100.');
     }
 
     setBusy(true);
@@ -174,6 +217,7 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
         cardRefNumber: form.cardRefNumber,
         notes: form.notes,
         txnDate: new Date(form.txnDate).toISOString(),
+        ...(editing ? { supplierPercent: Number(form.supplierPercent) || 0 } : {}),
       });
     } catch (err) {
       setError(err.message);
@@ -211,11 +255,55 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
               machine={m}
               index={i}
               active={form.machine === m._id}
-              onClick={() => setForm((f) => ({ ...f, machine: m._id }))}
+              onClick={() => pickMachine(m)}
             />
           ))}
         </div>
-        {machine && !machine.supplierPercent ? (
+
+        {editing && (
+          <Card className="mt-3 space-y-2.5">
+            <Field
+              label="Supplier %"
+              hint={
+                machine
+                  ? `${machine.name}'s usual rate is ${machine.supplierPercent || 0}%. Change it if the card company charged a different rate on this swipe.`
+                  : 'The rate the card company charged on this swipe.'
+              }
+            >
+              <div className="relative">
+                <input
+                  className="field sum pr-8 text-[18px]"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.supplierPercent}
+                  onChange={set('supplierPercent')}
+                  required
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 sum text-[12.5px] muted-2">%</span>
+              </div>
+            </Field>
+            {/* What the rate works out to, updating as it is typed. */}
+            <div className="grid grid-cols-3 gap-2 border-t border-[var(--rule)] pt-2.5 text-[11.5px]">
+              <div>
+                <p className="colhead">Supplier fee</p>
+                <p className="sum mt-0.5 text-stamp-500 dark:text-stamp-400">{money(calc.supplierFee)}</p>
+              </div>
+              <div>
+                <p className="colhead">Due from co.</p>
+                <p className="sum mt-0.5">{money(calc.supplierAccount)}</p>
+              </div>
+              <div className="text-right">
+                <p className="colhead">Margin</p>
+                <p className="sum mt-0.5 text-leaf-500 dark:text-leaf-400">{money(calc.margin)}</p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {!editing && machine && !machine.supplierPercent ? (
           <p className="mt-2 text-[11.5px] leading-snug text-stamp-600">
             {machine.name} has no supplier % set.{' '}
             <Link href={`/machines/${machine._id}/edit`} className="font-semibold underline">Set it</Link>{' '}
@@ -266,25 +354,42 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
       <section>
         <SectionTitle>Amount</SectionTitle>
         <Card className="space-y-3.5">
-          <Field
-            label={excluded ? 'Cash the customer asked for' : 'Amount on the card'}
-            hint={excluded ? 'What they walk away with' : 'The full amount the machine takes'}
-          >
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 sum text-[12.5px] muted-2">AED</span>
-              <input
-                className="field sum pl-14 text-[22px]"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={form.amount}
-                onChange={setAmount}
-                required
-              />
-            </div>
-          </Field>
+          {/* The amount and the rate on one line, so both are read together. */}
+          <div className="grid grid-cols-[1fr_7.5rem] gap-3">
+            <Field label="Enter the amount">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 sum text-[12.5px] muted-2">AED</span>
+                <input
+                  className="field sum pl-14 text-[22px]"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={form.amount}
+                  onChange={setAmount}
+                  required
+                />
+              </div>
+            </Field>
+
+            <Field label="Charge %">
+              <div className="relative">
+                <input
+                  className="field sum pr-8 text-[22px]"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={form.custPercent}
+                  onChange={setPercent}
+                  required
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 sum text-[12.5px] muted-2">%</span>
+              </div>
+            </Field>
+          </div>
 
           <div className="grid grid-cols-4 gap-2">
             {QUICK_AMOUNTS.map((amt) => (
@@ -312,48 +417,33 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
                 active={!excluded}
                 onClick={() => setMode('included')}
                 title="Includes commission"
-                detail="Charge comes out of it. The customer gets less."
               />
               <TypeCard
                 active={excluded}
                 onClick={() => setMode('excluded')}
                 title="Plus commission"
-                detail="Charge goes on top. The customer gets it all."
               />
             </div>
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Charge to customer  %" hint="Your rate on this swipe">
-              <input
-                className="field ref"
-                type="number"
-                inputMode="decimal"
-                min="0"
-                max="100"
-                step="0.01"
-                value={form.custPercent}
-                onChange={setPercent}
-                required
-              />
+          {/* Worked out from the amount and %, so they are shown, not typed. */}
+          <div className="grid grid-cols-2 gap-3 border p-2 rounded-2xl border-gray-300">
+            <Field label="Swipe amount" hint={excluded ? 'Pay plus the charge' : 'The amount entered'}>
+              <Figured value={calc.swipedAmount} tone="brand" />
             </Field>
-            <Field
-              label={excluded ? 'Swipe the card for' : 'Cash to hand over'}
-              hint={excluded ? 'Cash plus the charge' : 'Amount after commission'}
-            >
-              {/* Worked out from the amount and %, so it is shown, not typed. */}
-              <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 sum text-[11px] muted-2">AED</span>
-                <div className={cx('field sum pl-12 flex items-center', !form.counter && 'muted-2')}>
-                  {(Number(form.counter) || 0).toFixed(2)}
-                </div>
-              </div>
+            <Field label="Pay to customer" hint={excluded ? 'The amount entered' : 'After commission'}>
+              {/* Includes commission: shown rounded down, display only. Plus
+                  commission: the pay is what was typed, so it shows as is. */}
+              <Figured
+                value={excluded ? calc.givenAmount : calc.swipedAmount ? payShown(calc.swipedAmount, form.custPercent) : 0}
+                tone="leaf"
+              />
             </Field>
           </div>
         </Card>
       </section>
 
-      <Preview calc={calc} machine={machine} />
+      <Preview calc={calc} machine={machine} custPercent={form.custPercent} />
 
       <section>
         <SectionTitle>Card and notes</SectionTitle>
@@ -428,6 +518,30 @@ function MachineCard({ machine, index, active, onClick }) {
   );
 }
 
+const FIGURE_TONES = {
+  brand: 'border-(--brand)',
+  leaf: 'border-(--leaf)',
+};
+
+/**
+ * A read-only AED amount the form has worked out. Set apart from the inputs
+ * with a coloured border, so the result reads at a glance.
+ */
+function Figured({ value, tone = 'brand' }) {
+  const blank = !value;
+  return (
+    <div
+      className={cx(
+        'flex items-baseline gap-1.5 rounded-xl border-2 bg-(--paper-3) px-3 py-3 transition-colors',
+        blank ? 'border-(--rule-strong) text-(--text-3)' : cx('text-(--text)', FIGURE_TONES[tone])
+      )}
+    >
+      <span className="sum text-[11px] opacity-70">AED</span>
+      <span className="sum truncate text-[22px] leading-none">{(Number(value) || 0).toFixed(2)}</span>
+    </div>
+  );
+}
+
 /** One of the two ways the typed amount can be read. */
 function TypeCard({ active, onClick, title, detail }) {
   return (
@@ -452,9 +566,12 @@ function TypeCard({ active, onClick, title, detail }) {
  * The same columns the shop's own sheet works in: what the customer is
  * charged, what the supplier keeps, and what should land in the account.
  */
-function Preview({ calc, machine }) {
+function Preview({ calc, machine, custPercent }) {
   const empty = !calc.swipedAmount;
   const excluded = calc.commissionType === 'excluded';
+  // Includes commission: cash and charge are SHOWN as the exact rate gives
+  // them (cash rounded down). Display only - the saved figures are unchanged.
+  const cashShown = excluded || empty ? calc.givenAmount : payShown(calc.swipedAmount, custPercent);
 
   // return (
   //   <section>
@@ -462,7 +579,7 @@ function Preview({ calc, machine }) {
   //     <div className="card p-4">
   //       <div className="flex items-baseline justify-between gap-3 pb-3">
   //         <span className="colhead">Cash to customer</span>
-  //         <span className="sum text-[28px] leading-none">{money(calc.givenAmount)}</span>
+  //         <span className="sum text-[28px] leading-none">{money(cashShown)}</span>
   //       </div>
 
   //       {empty ? (
@@ -484,7 +601,9 @@ function Preview({ calc, machine }) {
   //                 ? `${calc.custPercent}% of the cash + ${calc.custPercent}%, added on top`
   //                 : `${calc.custPercent}% of the swipe, taken out of it`
   //             }
-  //             value={calc.chargeToCustomer}
+  //             {...(excluded
+  //               ? { value: calc.chargeToCustomer }
+  //               : { value: chargeShown(calc.swipedAmount, custPercent), isMoney: false })}
   //           />
   //           <Row
   //             label="Supplier fee"

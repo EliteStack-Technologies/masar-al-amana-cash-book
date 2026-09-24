@@ -16,6 +16,15 @@ export const money = (n) => `${CURRENCY} ${aed.format(Number(n) || 0)}`;
 /** AED 123,456 — for tiles and buttons where decimals only add noise. */
 export const moneyShort = (n) => `${CURRENCY} ${aedCompact.format(Math.round(Number(n) || 0))}`;
 
+/**
+ * A vendor ledger balance in words: + the card company has paid extra,
+ * - it has paid short and still owes it.
+ */
+export const balanceText = (balance) => {
+  if (!balance) return 'No balance';
+  return balance > 0 ? `Paid extra ${money(balance)}` : `Short ${money(-balance)}`;
+};
+
 export const dateTime = (d) =>
   d
     ? new Intl.DateTimeFormat('en-AE', {

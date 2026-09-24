@@ -89,6 +89,30 @@ export default function DashboardPage() {
             </Card>
           </section>
 
+          {data.capital && (
+            <section>
+              <SectionTitle
+                action={
+                  <Link href="/capital" className="colhead flex items-center gap-0.5 !text-[var(--text)]">
+                    All capital <IconChevron size={12} />
+                  </Link>
+                }
+              >
+                Capital
+              </SectionTitle>
+              <Card className="p-0">
+                <div className="grid grid-cols-2">
+                  <div className="border-r border-[var(--rule)] p-3.5">
+                    <Figure label="Put in" value={money(data.capital.invested)} sub={`${data.capital.count} ${data.capital.count === 1 ? 'entry' : 'entries'}`} />
+                  </div>
+                  <div className="p-3.5">
+                    <Figure label="In the shop" value={money(data.capital.balance)} tone="leaf" sub={`${money(data.capital.withdrawn)} withdrawn`} />
+                  </div>
+                </div>
+              </Card>
+            </section>
+          )}
+
           <section>
             <SectionTitle>This month</SectionTitle>
             <Card className="ruled py-0">
@@ -181,7 +205,7 @@ function Outstanding({ settlement }) {
     <section>
       <SectionTitle>Money out with the card company</SectionTitle>
       <Card className="p-4">
-        <p className="sum text-[38px] leading-none text-stamp-500 dark:text-stamp-400">
+        <p className="sum text-[38px] leading-none text-leaf-500 dark:text-leaf-400">
           {money(settlement.pendingAmount)}
         </p>
         <p className="mt-1.5 text-[12.5px] muted">
@@ -191,6 +215,24 @@ function Outstanding({ settlement }) {
                 settlement.pendingCount === 1 ? 'entry' : 'entries'
               } you are waiting on.`}
         </p>
+
+        {/* What each card company is holding, largest first. */}
+        {settlement.byCompany?.length > 0 && (
+          <div className="ruled mt-3.5 border-t border-[var(--rule)]">
+            {settlement.byCompany.map((c) => (
+              <div key={c.company} className="flex items-baseline justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold">{c.company}</p>
+                  <p className="ref mt-0.5 text-[10.5px] muted-2">
+                    {c.pendingCount} {c.pendingCount === 1 ? 'entry' : 'entries'}
+                    {c.machines > 1 ? ` · ${c.machines} machines` : ''}
+                  </p>
+                </div>
+                <p className="sum shrink-0 text-[16px] text-leaf-500 dark:text-leaf-400">{money(c.pendingAmount)}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4 border-t border-[var(--rule)] pt-3.5">
           <SplitRail

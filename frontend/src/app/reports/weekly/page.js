@@ -7,7 +7,7 @@ import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
 import { todayInput, dateOnly, money, moneyShort } from '@/lib/format';
 import { Card, Empty, ErrorNote, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
-import { PeriodPicker, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
+import { PeriodPicker, PeriodTabs, ReportBreakdown, ReportHeadline } from '@/components/ReportBits';
 import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconChart, IconChevron } from '@/components/Icons';
 
@@ -45,6 +45,7 @@ function WeeklyReport() {
       action={<DownloadMenu params={{ type: 'weekly', date }} copies={PERIOD_COPIES} />}
     >
       <div className="space-y-5">
+        <PeriodTabs current="weekly" date={date} />
         <PeriodPicker type="date" label="Any day in the week" value={date} onChange={setDate} />
         <ErrorNote>{error}</ErrorNote>
 

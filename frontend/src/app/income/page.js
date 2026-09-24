@@ -8,12 +8,14 @@ import { money, dateOnly } from '@/lib/format';
 import { Button, Card, Empty, ErrorNote, Figure, Skeleton } from '@/components/ui';
 import { IconArrowUp, IconSearch, IconChevron, IconPlus } from '@/components/Icons';
 import { DownloadMenu } from '@/components/DownloadMenu';
+import { Pager, usePageFor } from '@/components/Pager';
 
 export default function IncomePage() {
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
+  const [page, setPage] = usePageFor(debouncedQ);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
@@ -21,12 +23,16 @@ export default function IncomePage() {
   }, [q]);
 
   useEffect(() => {
+    let alive = true;
     setData(null);
     setError('');
-    api(`/income${qs({ q: debouncedQ })}`)
-      .then(setData)
-      .catch((err) => setError(err.message));
-  }, [debouncedQ]);
+    api(`/income${qs({ q: debouncedQ, page })}`)
+      .then((d) => alive && setData(d))
+      .catch((err) => alive && setError(err.message));
+    return () => {
+      alive = false;
+    };
+  }, [debouncedQ, page]);
 
   return (
     <AppShell
@@ -66,6 +72,8 @@ export default function IncomePage() {
                 </Link>
               ))}
             </div>
+
+            <Pager page={data.page} pages={data.pages} total={data.total} onChange={setPage} />
           </div>
         ) : (
           <Empty
