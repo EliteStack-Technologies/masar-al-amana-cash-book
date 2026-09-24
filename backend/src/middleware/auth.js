@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { COOKIE_NAME } from '../utils/token.js';
+import { SHOP_ID } from '../shop.js';
 
 export async function requireAuth(req, res, next) {
   try {
@@ -16,6 +17,8 @@ export async function requireAuth(req, res, next) {
     if (!user) return res.status(401).json({ message: 'Account no longer exists' });
 
     req.user = user;
+    // Both logins share one shop; scope data by this, not by req.user.
+    req.shopId = SHOP_ID;
     next();
   } catch {
     res.status(401).json({ message: 'Session expired, please sign in again' });

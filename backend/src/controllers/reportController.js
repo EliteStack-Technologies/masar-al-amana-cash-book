@@ -3,6 +3,8 @@ import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
 import Loan from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
+import Capital from '../models/Capital.js';
+import CapitalWithdrawal from '../models/CapitalWithdrawal.js';
 import CardMachine from '../models/CardMachine.js';
 import Settlement from '../models/Settlement.js';
 import OpeningBalance from '../models/OpeningBalance.js';
@@ -50,16 +52,17 @@ const tidy = (row) => {
   return out;
 };
 
-const txnMatch = (ownerId, range) => {
-  const match = { shopOwner: ownerId };
+// `extra` narrows the match further, e.g. { machine } for one machine's report.
+const txnMatch = (ownerId, range, extra = {}) => {
+  const match = { shopOwner: ownerId, ...extra };
   if (range) match.txnDate = { $gte: range.from, $lt: range.to };
   return match;
 };
 
 /** Transaction summary for any date window, scoped to one owner. */
-export async function summarise(ownerId, range) {
+export async function summarise(ownerId, range, extra) {
   const [row] = await Transaction.aggregate([
-    { $match: txnMatch(ownerId, range) },
+    { $match: txnMatch(ownerId, range, extra) },
     { $group: { _id: null, ...SUM_STAGE } },
   ]);
   return tidy(row);
@@ -101,6 +104,29 @@ export async function loanTotals(ownerId) {
   };
 }
 
+/** All-time capital position: put in by partners, withdrawn, still in the shop. */
+export async function capitalTotals(ownerId) {
+  const [row] = await Capital.aggregate([
+    { $match: { shopOwner: ownerId } },
+    {
+      $group: {
+        _id: null,
+        invested: { $sum: '$amount' },
+        withdrawn: { $sum: '$withdrawnAmount' },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+  const invested = round2(row?.invested || 0);
+  const withdrawn = round2(row?.withdrawn || 0);
+  return {
+    invested,
+    withdrawn,
+    balance: round2(Math.max(0, invested - withdrawn)),
+    count: row?.count || 0,
+  };
+}
+
 /** Loans taken + repayments made inside a date window (for period reports). */
 async function loanActivity(ownerId, range) {
   const [givenRow] = await Loan.aggregate([
@@ -118,26 +144,34 @@ async function loanActivity(ownerId, range) {
 }
 
 /**
- * Cash actually in the drawer, all time: the opening balance and the loan
- * float that came in, less what has been repaid and handed to customers, plus
- * what the card company and other income have paid back.
+ * Cash actually in the drawer, all time: the opening balance, capital and the
+ * loan float that came in, less what has been repaid, withdrawn and handed to
+ * customers, plus what the card company and other income have paid back.
  */
 export async function cashPosition(ownerId) {
-  const [txns, loans, repaid, income, expense, opening] = await Promise.all([
+  const [txns, loans, repaid, income, expense, opening, capital, withdrawn, vendorDiff] = await Promise.all([
     summarise(ownerId, null),
     moneySum(Loan, ownerId, null, 'principal'),
     moneySum(LoanSettlement, ownerId, null),
     moneySum(Income, ownerId, null),
     moneySum(Expense, ownerId, null),
     moneySum(OpeningBalance, ownerId, null),
+    moneySum(Capital, ownerId, null),
+    moneySum(CapitalWithdrawal, ownerId, null),
+    // Vendor settlements settle swipes at what was owed; what the company paid
+    // over (+) or under (-) that is held here.
+    moneySum(Settlement, ownerId, null, 'difference'),
   ]);
 
   return {
     inHand: round2(
-      opening.amount + loans.amount - repaid.amount - txns.givenAmount + txns.receivedAmount +
-        income.amount - expense.amount
+      opening.amount + capital.amount - withdrawn.amount + loans.amount - repaid.amount -
+        txns.givenAmount + txns.receivedAmount + vendorDiff.amount + income.amount - expense.amount
     ),
+    vendorDifference: vendorDiff.amount,
     opening: opening.amount,
+    capitalIn: capital.amount,
+    capitalWithdrawn: withdrawn.amount,
     loanTaken: loans.amount,
     loanRepaid: repaid.amount,
     givenOut: txns.givenAmount,
@@ -148,12 +182,12 @@ export async function cashPosition(ownerId) {
 }
 
 export const dashboard = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const date = req.query.date || todayStr();
   const today = dayRange(date);
   const month = monthRange(date.slice(0, 7));
 
-  const [todayStats, monthStats, allTime, recent, todayIncome, todayExpense, loans, cash] =
+  const [todayStats, monthStats, allTime, recent, todayIncome, todayExpense, loans, cash, capital, byCompany] =
     await Promise.all([
       summarise(ownerId, today),
       summarise(ownerId, month),
@@ -167,6 +201,8 @@ export const dashboard = asyncHandler(async (req, res) => {
       moneySum(Expense, ownerId, today),
       loanTotals(ownerId),
       cashPosition(ownerId),
+      capitalTotals(ownerId),
+      pendingByCompany(ownerId),
     ]);
 
   res.json({
@@ -176,6 +212,7 @@ export const dashboard = asyncHandler(async (req, res) => {
     income: { today: todayIncome },
     expense: { today: todayExpense },
     loans,
+    capital,
     cash,
     // Settlement is a running balance, so it is reported across all time.
     settlement: {
@@ -183,13 +220,14 @@ export const dashboard = asyncHandler(async (req, res) => {
       pendingAmount: allTime.pendingAmount,
       receivedCount: allTime.receivedCount,
       pendingCount: allTime.pendingCount,
+      byCompany,
     },
     recent,
   });
 });
 
 export const dailyReport = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const date = req.query.date || todayStr();
   const range = dayRange(date);
 
@@ -209,7 +247,7 @@ export const dailyReport = asyncHandler(async (req, res) => {
 });
 
 export const weeklyReport = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const date = req.query.date || todayStr();
   const range = weekRange(date);
   const match = txnMatch(ownerId, range);
@@ -244,7 +282,7 @@ export const weeklyReport = asyncHandler(async (req, res) => {
 });
 
 export const monthlyReport = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const month = req.query.month || todayStr().slice(0, 7);
   const range = monthRange(month);
   const match = txnMatch(ownerId, range);
@@ -277,7 +315,7 @@ export const monthlyReport = asyncHandler(async (req, res) => {
 });
 
 export const commissionReport = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const month = req.query.month || todayStr().slice(0, 7);
   const range = monthRange(month);
   const match = txnMatch(ownerId, range);
@@ -349,8 +387,30 @@ async function withMachineNames(ownerId, rows) {
   });
 }
 
+/**
+ * What each card company still holds on pending swipes, largest first.
+ * Machines with the same company are added together; a machine with no
+ * company set stands in under its own name.
+ */
+async function pendingByCompany(ownerId) {
+  const raw = await Transaction.aggregate([
+    { $match: { shopOwner: ownerId, settlementStatus: 'pending' } },
+    { $group: { _id: '$machine', ...SUM_STAGE } },
+  ]);
+  const byCompany = new Map();
+  for (const m of await withMachineNames(ownerId, raw)) {
+    const name = m.cardCompany || m.machineName;
+    const row = byCompany.get(name) || { company: name, pendingAmount: 0, pendingCount: 0, machines: 0 };
+    row.pendingAmount = round2(row.pendingAmount + m.pendingAmount);
+    row.pendingCount += m.pendingCount;
+    row.machines += 1;
+    byCompany.set(name, row);
+  }
+  return [...byCompany.values()].sort((a, b) => b.pendingAmount - a.pendingAmount);
+}
+
 export const customerReport = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const month = req.query.month;
   const range = month ? monthRange(month) : null;
 
@@ -380,7 +440,7 @@ export const customerReport = asyncHandler(async (req, res) => {
 });
 
 export const machineReport = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const month = req.query.month;
   const range = month ? monthRange(month) : null;
 
@@ -397,8 +457,73 @@ export const machineReport = asyncHandler(async (req, res) => {
   });
 });
 
+const PERIODS = ['daily', 'weekly', 'monthly'];
+
+/**
+ * The window a period report covers, from the day being looked at:
+ * that day, the Mon-Sun week holding it, or its month.
+ */
+export function periodWindow(period, date) {
+  if (period === 'weekly') {
+    const r = weekRange(date);
+    return { ...r, label: `${r.start} to ${r.end}` };
+  }
+  if (period === 'monthly') {
+    const month = date.slice(0, 7);
+    return { ...monthRange(month), label: month };
+  }
+  return { ...dayRange(date), label: date };
+}
+
+/**
+ * One card machine over a day, week or month: its totals, a day-by-day
+ * breakdown and every swipe taken on it.
+ */
+export const machinePeriodReport = asyncHandler(async (req, res) => {
+  const ownerId = req.shopId;
+  const machine = await CardMachine.findOne({ _id: req.params.id, shopOwner: ownerId }).lean();
+  if (!machine) return res.status(404).json({ message: 'Card machine not found' });
+
+  const period = PERIODS.includes(req.query.period) ? req.query.period : 'daily';
+  const date = req.query.date || todayStr();
+  const range = periodWindow(period, date);
+  // Aggregations do not cast ids, so match on the stored ObjectId itself.
+  const only = { machine: machine._id };
+  const match = txnMatch(ownerId, range, only);
+
+  const [summary, days, transactions] = await Promise.all([
+    summarise(ownerId, range, only),
+    Transaction.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$txnDate', timezone: TZ() } },
+          ...SUM_STAGE,
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
+    Transaction.find(match).populate('customer', 'name mobile').sort({ txnDate: 1 }).lean(),
+  ]);
+
+  res.json({
+    machine: {
+      _id: machine._id,
+      name: machine.name,
+      cardCompany: machine.cardCompany || '',
+      machineNumber: machine.machineNumber || '',
+    },
+    period,
+    date,
+    label: range.label,
+    summary,
+    days: days.map((d) => ({ date: d._id, ...tidy(d) })),
+    transactions,
+  });
+});
+
 export const settlementReport = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const [summary, pending] = await Promise.all([
     summarise(ownerId, null),
     Transaction.find({ shopOwner: ownerId, settlementStatus: 'pending' })
