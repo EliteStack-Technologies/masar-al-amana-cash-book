@@ -15,7 +15,7 @@ const findAccountByName = (ownerId, name) =>
  * from the loan accounts list. A name with no match opens a new account on
  * the spot - the add-loan screen asks for nothing else.
  */
-async function resolveAccount(body, ownerId) {
+async function resolveAccount(body, ownerId, userId) {
   if (body.account) {
     const account = await LoanAccount.findOne({ _id: body.account, shopOwner: ownerId });
     if (!account) throw Object.assign(new Error('Account not found'), { status: 404 });
@@ -32,7 +32,7 @@ async function resolveAccount(body, ownerId) {
     shopOwner: ownerId,
     name,
     mobile: String(body.lenderMobile || '').trim(),
-    createdBy: ownerId,
+    createdBy: userId,
   });
 }
 
@@ -46,7 +46,8 @@ async function adoptLegacyLoans(ownerId) {
   for (const loan of legacy) {
     const account = await resolveAccount(
       { lenderName: loan.lenderName, lenderMobile: loan.lenderMobile },
-      ownerId
+      ownerId,
+      loan.createdBy
     );
     loan.account = account._id;
     await loan.save();
@@ -55,8 +56,8 @@ async function adoptLegacyLoans(ownerId) {
 
 /** The loan accounts list, for the add-loan picker. */
 export const listAccounts = asyncHandler(async (req, res) => {
-  await adoptLegacyLoans(req.user._id);
-  const items = await LoanAccount.find({ shopOwner: req.user._id })
+  await adoptLegacyLoans(req.shopId);
+  const items = await LoanAccount.find({ shopOwner: req.shopId })
     .collation({ locale: 'en', strength: 2 })
     .sort({ name: 1 })
     .lean();
@@ -97,8 +98,8 @@ async function refreshLoan(loan) {
 export const listLoans = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-  await adoptLegacyLoans(req.user._id);
-  const filter = buildFilter(req.query, req.user._id);
+  await adoptLegacyLoans(req.shopId);
+  const filter = buildFilter(req.query, req.shopId);
 
   const [items, total, totals, byAccount] = await Promise.all([
     Loan.find(filter).sort({ entryDate: -1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
@@ -115,7 +116,7 @@ export const listLoans = asyncHandler(async (req, res) => {
     ]),
     // Account-wise position, so the loan screen can be read per lender.
     Loan.aggregate([
-      { $match: { shopOwner: req.user._id } },
+      { $match: { shopOwner: req.shopId } },
       { $sort: { entryDate: 1 } },
       {
         $group: {
@@ -162,16 +163,16 @@ export const listLoans = asyncHandler(async (req, res) => {
 export const accountLoans = asyncHandler(async (req, res) => {
   const account = await LoanAccount.findOne({
     _id: req.params.accountId,
-    shopOwner: req.user._id,
+    shopOwner: req.shopId,
   }).lean();
   if (!account) return res.status(404).json({ message: 'Account not found' });
 
-  const loans = await Loan.find({ shopOwner: req.user._id, account: account._id })
+  const loans = await Loan.find({ shopOwner: req.shopId, account: account._id })
     .sort({ entryDate: -1, createdAt: -1 })
     .lean();
 
   const settlements = await LoanSettlement.find({
-    shopOwner: req.user._id,
+    shopOwner: req.shopId,
     loan: { $in: loans.map((l) => l._id) },
   })
     .sort({ entryDate: -1, createdAt: -1 })
@@ -224,7 +225,7 @@ export const accountLoans = asyncHandler(async (req, res) => {
 });
 
 export const getLoan = asyncHandler(async (req, res) => {
-  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!loan) return res.status(404).json({ message: 'Loan not found' });
 
   const settlements = await LoanSettlement.find({ loan: loan._id })
@@ -240,9 +241,9 @@ export const createLoan = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Loan amount must be greater than 0' });
   }
 
-  const account = await resolveAccount(body, req.user._id);
+  const account = await resolveAccount(body, req.shopId, req.user._id);
 
-  const payload = { shopOwner: req.user._id, createdBy: req.user._id };
+  const payload = { shopOwner: req.shopId, createdBy: req.user._id };
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
   // Snapshot the account so renaming it never rewrites history.
   payload.account = account._id;
@@ -254,12 +255,12 @@ export const createLoan = asyncHandler(async (req, res) => {
 });
 
 export const updateLoan = asyncHandler(async (req, res) => {
-  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!loan) return res.status(404).json({ message: 'Loan not found' });
 
   for (const key of EDITABLE) if (req.body[key] !== undefined) loan[key] = req.body[key];
   if (req.body.account !== undefined || req.body.lenderName !== undefined) {
-    const account = await resolveAccount({ ...req.body, lenderName: loan.lenderName }, req.user._id);
+    const account = await resolveAccount({ ...req.body, lenderName: loan.lenderName }, req.shopId, req.user._id);
     loan.account = account._id;
     loan.lenderName = account.name;
     loan.lenderMobile = account.mobile || '';
@@ -272,7 +273,7 @@ export const updateLoan = asyncHandler(async (req, res) => {
 });
 
 export const deleteLoan = asyncHandler(async (req, res) => {
-  const loan = await Loan.findOneAndDelete({ _id: req.params.id, shopOwner: req.user._id });
+  const loan = await Loan.findOneAndDelete({ _id: req.params.id, shopOwner: req.shopId });
   if (!loan) return res.status(404).json({ message: 'Loan not found' });
   await LoanSettlement.deleteMany({ loan: loan._id });
   res.json({ message: `${loan.loanNumber} deleted` });
@@ -280,7 +281,7 @@ export const deleteLoan = asyncHandler(async (req, res) => {
 
 /** Record a repayment against a loan. */
 export const addSettlement = asyncHandler(async (req, res) => {
-  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!loan) return res.status(404).json({ message: 'Loan not found' });
 
   if (!(Number(req.body.amount) > 0)) {
@@ -288,7 +289,7 @@ export const addSettlement = asyncHandler(async (req, res) => {
   }
 
   await LoanSettlement.create({
-    shopOwner: req.user._id,
+    shopOwner: req.shopId,
     loan: loan._id,
     amount: Number(req.body.amount),
     entryDate: req.body.entryDate || Date.now(),
@@ -307,11 +308,11 @@ export const deleteSettlement = asyncHandler(async (req, res) => {
   const settlement = await LoanSettlement.findOneAndDelete({
     _id: req.params.settlementId,
     loan: req.params.id,
-    shopOwner: req.user._id,
+    shopOwner: req.shopId,
   });
   if (!settlement) return res.status(404).json({ message: 'Settlement not found' });
 
-  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const loan = await Loan.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (loan) await refreshLoan(loan);
   res.json({ message: 'Settlement removed' });
 });

@@ -11,7 +11,7 @@ import CardMachine from '../models/CardMachine.js';
 import { asyncHandler } from '../middleware/error.js';
 import { buildFilter } from './transactionController.js';
 import {
-  summarise, moneySum, loanTotals, customerReport, machineReport,
+  summarise, moneySum, loanTotals, customerReport, machineReport, periodWindow,
 } from './reportController.js';
 import { dayRange, weekRange, monthRange, todayStr, TZ } from '../utils/dates.js';
 
@@ -393,6 +393,27 @@ async function gatherReport(query, ownerId) {
     };
   }
 
+  // One machine's daily, weekly or monthly report, with the same two copies
+  // as the shop-wide period reports.
+  if (type === 'machine-period') {
+    const machine = await CardMachine.findOne({ _id: query.machine, shopOwner: ownerId }).lean();
+    if (!machine) throw Object.assign(new Error('Card machine not found'), { status: 404 });
+
+    const period = ['weekly', 'monthly'].includes(query.period) ? query.period : 'daily';
+    const r = periodWindow(period, query.date || todayStr());
+    const only = { machine: machine._id };
+    const rows = await Transaction.find({ shopOwner: ownerId, ...only, txnDate: { $gte: r.from, $lt: r.to } })
+      .sort({ txnDate: 1 }).lean();
+    const periodName = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' }[period];
+    const slug = machine.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    return {
+      title: `${machine.name} - ${periodName} Report - ${r.label}` + mark,
+      fileBase: `${slug}-${period}-${r.label.replace(/ /g, '-')}` + tag,
+      columns: periodColumns, rows: rows.map(txnRow),
+      summaryLines: periodSummary(await summarise(ownerId, r, only)),
+    };
+  }
+
   // Default: whatever the Transactions screen is currently filtered to.
   const rows = await Transaction.find(buildFilter(query, ownerId)).sort({ txnDate: -1 }).lean();
   return {
@@ -416,14 +437,72 @@ function incomeExpenseFilter(query, ownerId) {
 /** The report controllers are Express handlers; capture their JSON here. */
 function runReport(handler, ownerId, query) {
   return new Promise((resolve, reject) => {
-    const req = { user: { _id: ownerId }, query };
+    const req = { user: { _id: ownerId }, shopId: ownerId, query };
     const res = { json: resolve };
     Promise.resolve(handler(req, res, reject)).catch(reject);
   });
 }
 
+/* --- PDF summary ---------------------------------------------------------- */
+
+const pdfMoney = new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Colour for a summary figure, read from its label: what the shop earns in
+ * green, what goes to the card company or is still out in red, what is owed
+ * to the shop in indigo, everything else in ink.
+ */
+function summaryTone(label) {
+  if (/margin|profit|received/i.test(label)) return '#047857';
+  if (/fee|still with|short|repaid|withdrawn|expense/i.test(label)) return '#be123c';
+  if (/due|owed|outstanding/i.test(label)) return '#4f46e5';
+  return '#0f172a';
+}
+
+/**
+ * The summary as a grid of tiles - a small grey label over a bold figure -
+ * four to a row, so the totals read at a glance instead of as a list.
+ * Leaves doc.y just below the grid.
+ */
+function drawSummaryTiles(doc, lines, x0, width) {
+  if (!lines.length) return;
+
+  const perRow = Math.min(4, lines.length);
+  const gap = 10;
+  const tileW = (width - gap * (perRow - 1)) / perRow;
+  const tileH = 46;
+
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#64748b')
+    .text('SUMMARY', x0, doc.y, { characterSpacing: 1 });
+  doc.moveDown(0.5);
+  const top = doc.y;
+
+  lines.forEach(([label, value, isMoney], i) => {
+    const x = x0 + (i % perRow) * (tileW + gap);
+    const y = top + Math.floor(i / perRow) * (tileH + gap);
+    const tone = summaryTone(label);
+
+    doc.roundedRect(x, y, tileW, tileH, 5).lineWidth(0.75).fillAndStroke('#f8fafc', '#e2e8f0');
+    // A coloured edge ties each tile to the meaning of its figure.
+    doc.rect(x, y + 5, 2.5, tileH - 10).fill(tone);
+
+    doc.font('Helvetica').fontSize(7.5).fillColor('#64748b')
+      .text(label.toUpperCase(), x + 11, y + 8, { width: tileW - 18, lineBreak: false, ellipsis: true });
+
+    const shown = isMoney ? pdfMoney.format(Number(value) || 0) : String(value);
+    doc.font('Helvetica-Bold').fontSize(14).fillColor(tone)
+      .text(shown, x + 11, y + 22, { width: tileW - 18, lineBreak: false, continued: isMoney });
+    if (isMoney) doc.font('Helvetica').fontSize(8).fillColor('#94a3b8').text('  AED', { lineBreak: false });
+  });
+
+  const rowsUsed = Math.ceil(lines.length / perRow);
+  doc.font('Helvetica');
+  doc.x = x0;
+  doc.y = top + rowsUsed * tileH + (rowsUsed - 1) * gap + 18;
+}
+
 export const exportExcel = asyncHandler(async (req, res) => {
-  const { title, fileBase, columns, rows, summaryLines } = await gatherReport(req.query, req.user._id);
+  const { title, fileBase, columns, rows, summaryLines } = await gatherReport(req.query, req.shopId);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Cash Book';
@@ -456,7 +535,7 @@ export const exportExcel = asyncHandler(async (req, res) => {
 });
 
 export const exportPdf = asyncHandler(async (req, res) => {
-  const { title, fileBase, columns, rows, summaryLines } = await gatherReport(req.query, req.user._id);
+  const { title, fileBase, columns, rows, summaryLines } = await gatherReport(req.query, req.shopId);
 
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', 'attachment; filename="' + fileBase + '.pdf"');
@@ -464,25 +543,21 @@ export const exportPdf = asyncHandler(async (req, res) => {
   const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 28 });
   doc.pipe(res);
 
-  doc.fontSize(16).fillColor('#0f172a').text(title);
-  doc.fontSize(9).fillColor('#64748b').text('Generated ' + fmtDate(new Date()));
-  doc.moveDown(0.8);
+  const startX = doc.page.margins.left;
+  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-  doc.fontSize(9).fillColor('#64748b').text('All amounts in AED');
-  doc.moveDown(0.5);
-  doc.fontSize(11).fillColor('#0f172a').text('Summary');
-  doc.moveDown(0.3);
-  doc.fontSize(9).fillColor('#334155');
-  summaryLines.forEach(([label, value, isMoney]) => {
-    const shown = isMoney ? 'AED ' + Number(value).toFixed(2) : value;
-    doc.text(label + ': ' + shown);
-  });
+  // --- heading ---
+  doc.font('Helvetica-Bold').fontSize(18).fillColor('#0f172a').text(title, startX, doc.y);
+  doc.font('Helvetica').fontSize(9).fillColor('#64748b')
+    .text('Generated ' + fmtDate(new Date()) + '   ·   All amounts in AED');
+  doc.moveDown(0.6);
+  doc.moveTo(startX, doc.y).lineTo(startX + pageWidth, doc.y).lineWidth(0.75).strokeColor('#cbd5e1').stroke();
   doc.moveDown(0.9);
 
-  const startX = doc.page.margins.left;
+  drawSummaryTiles(doc, summaryLines, startX, pageWidth);
+
   // The table always spans the page: the columns' pdf widths are relative,
   // stretched (or squeezed) to the printable width.
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
   const scale = pageWidth / columns.reduce((a, c) => a + (c.pdf || 60), 0);
   const colWidth = (c) => (c.pdf || 60) * scale;
   const tableWidth = pageWidth;

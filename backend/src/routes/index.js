@@ -10,6 +10,7 @@ import * as category from '../controllers/categoryController.js';
 import * as income from '../controllers/incomeController.js';
 import * as expense from '../controllers/expenseController.js';
 import * as loan from '../controllers/loanController.js';
+import * as capital from '../controllers/capitalController.js';
 import * as settlement from '../controllers/settlementController.js';
 import * as cashbook from '../controllers/cashbookController.js';
 import * as opening from '../controllers/openingBalanceController.js';
@@ -84,10 +85,28 @@ router.delete('/loans/:id', loan.deleteLoan);
 router.post('/loans/:id/settlements', loan.addSettlement);
 router.delete('/loans/:id/settlements/:settlementId', loan.deleteSettlement);
 
+// --- capital + withdrawals ---
+router.get('/capital', capital.listCapital);
+router.post('/capital', capital.createCapital);
+// Registered before '/capital/:id' so 'accounts' is never read as an id.
+router.get('/capital/accounts', capital.listAccounts);
+router.get('/capital/account/:accountId', capital.accountCapital);
+router.get('/capital/:id', capital.getCapital);
+router.patch('/capital/:id', capital.updateCapital);
+router.delete('/capital/:id', capital.deleteCapital);
+router.post('/capital/:id/withdrawals', capital.addWithdrawal);
+router.delete('/capital/:id/withdrawals/:withdrawalId', capital.deleteWithdrawal);
+
 // --- day-level settlement ---
 router.get('/settlements/day', settlement.listSettlements);
 router.post('/settlements/day', settlement.settleDay);
+// Reverts vendor (machine-wise) settlements too: both are Settlement batches.
 router.delete('/settlements/day/:id', settlement.revertDay);
+
+// --- vendor (machine-wise) settlement + ledger ---
+router.get('/settlements/vendors', settlement.listVendors);
+router.get('/settlements/vendors/:machineId', settlement.vendorLedger);
+router.post('/settlements/vendors/:machineId', settlement.settleVendor);
 
 // --- cash book (every entry in one ledger) ---
 router.get('/cashbook', cashbook.cashbook);
@@ -105,6 +124,8 @@ router.get('/reports/commission', report.commissionReport);
 router.get('/reports/settlement', report.settlementReport);
 router.get('/reports/customers', report.customerReport);
 router.get('/reports/machines', report.machineReport);
+// One machine by day, week or month: ?period=daily|weekly|monthly&date=YYYY-MM-DD
+router.get('/reports/machines/:id', report.machinePeriodReport);
 
 // --- exports ---
 router.get('/export/excel', xport.exportExcel);

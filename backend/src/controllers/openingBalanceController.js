@@ -4,7 +4,7 @@ import { asyncHandler } from '../middleware/error.js';
 const EDITABLE = ['entryDate', 'amount', 'notes'];
 
 export const listOpening = asyncHandler(async (req, res) => {
-  const items = await OpeningBalance.find({ shopOwner: req.user._id })
+  const items = await OpeningBalance.find({ shopOwner: req.shopId })
     .sort({ entryDate: -1, createdAt: -1 })
     .lean();
   res.json({ items });
@@ -15,7 +15,7 @@ export const createOpening = asyncHandler(async (req, res) => {
   if (!(Number(body.amount) > 0)) {
     return res.status(400).json({ message: 'Amount must be greater than 0' });
   }
-  const payload = { shopOwner: req.user._id, createdBy: req.user._id };
+  const payload = { shopOwner: req.shopId, createdBy: req.user._id };
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
 
   const opening = await OpeningBalance.create(payload);
@@ -23,7 +23,7 @@ export const createOpening = asyncHandler(async (req, res) => {
 });
 
 export const updateOpening = asyncHandler(async (req, res) => {
-  const opening = await OpeningBalance.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const opening = await OpeningBalance.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!opening) return res.status(404).json({ message: 'Opening balance not found' });
   if (req.body.amount !== undefined && !(Number(req.body.amount) > 0)) {
     return res.status(400).json({ message: 'Amount must be greater than 0' });
@@ -36,7 +36,7 @@ export const updateOpening = asyncHandler(async (req, res) => {
 });
 
 export const deleteOpening = asyncHandler(async (req, res) => {
-  const opening = await OpeningBalance.findOneAndDelete({ _id: req.params.id, shopOwner: req.user._id });
+  const opening = await OpeningBalance.findOneAndDelete({ _id: req.params.id, shopOwner: req.shopId });
   if (!opening) return res.status(404).json({ message: 'Opening balance not found' });
   res.json({ message: `${opening.openingNumber} deleted` });
 });

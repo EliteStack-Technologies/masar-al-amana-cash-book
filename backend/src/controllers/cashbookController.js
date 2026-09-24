@@ -3,6 +3,9 @@ import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
 import Loan from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
+import Capital from '../models/Capital.js';
+import CapitalWithdrawal from '../models/CapitalWithdrawal.js';
+import Settlement from '../models/Settlement.js';
 import OpeningBalance from '../models/OpeningBalance.js';
 import { asyncHandler } from '../middleware/error.js';
 import { round2 } from '../utils/calc.js';
@@ -10,7 +13,7 @@ import { round2 } from '../utils/calc.js';
 /**
  * One ledger for the whole book. Every entry the shop makes - opening
  * balances, swipes, the settlements that pay them back, loans taken from
- * customers, repayments, income and expenses - lands here as a single cash-in or cash-out line.
+ * customers, repayments, capital put in and withdrawn, income and expenses - lands here as a single cash-in or cash-out line.
  *
  * A swipe puts out two separate lines: the cash handed over on the day of the
  * swipe, and the company's payment on the day it actually arrived. That is
@@ -33,7 +36,7 @@ async function collect(ownerId, from, to) {
     return m;
   };
 
-  const [txns, loans, repayments, incomes, expenses, openings] = await Promise.all([
+  const [txns, loans, repayments, incomes, expenses, openings, capitals, withdrawals, vendorDiffs] = await Promise.all([
     // Swipes are pulled on either date, then split into their two lines.
     Transaction.find({
       shopOwner: ownerId,
@@ -49,6 +52,13 @@ async function collect(ownerId, from, to) {
     Income.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
     Expense.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
     OpeningBalance.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
+    Capital.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
+    CapitalWithdrawal.find(rangeMatch('entryDate')).populate('capital', 'capitalNumber partnerName').sort({ entryDate: 1 }).lean(),
+    // Vendor settlements whose payment did not match what was owed.
+    Settlement.find({ ...rangeMatch('receivedAt'), machine: { $ne: null }, difference: { $ne: 0 } })
+      .populate('machine', 'name cardCompany')
+      .sort({ receivedAt: 1 })
+      .lean(),
   ]);
 
   const rows = [];
@@ -64,7 +74,8 @@ async function collect(ownerId, from, to) {
       title: 'Opening balance',
       detail: o.notes || '',
       notes: o.notes || '',
-      link: '',
+      // Opening balances are added and edited on their own page (More).
+      link: '/opening',
     }));
   }
 
@@ -122,6 +133,48 @@ async function collect(ownerId, from, to) {
     }));
   }
 
+  // A vendor settlement settles its swipes at what they were owed, so the
+  // cash the company paid over or under that is its own line.
+  for (const s of vendorDiffs) {
+    const extra = s.difference > 0;
+    rows.push(line({
+      date: s.receivedAt,
+      kind: 'settle-diff',
+      direction: extra ? IN : OUT,
+      amount: Math.abs(s.difference),
+      ref: '',
+      title: `Settlement ${extra ? 'extra' : 'short'} - ${s.machine?.cardCompany || s.machine?.name || 'card company'}`,
+      detail: `Paid ${s.receivedAmount} for ${s.expectedAmount} due`,
+      link: s.machine ? `/settlements/machine/${s.machine._id}` : '',
+    }));
+  }
+
+  for (const c of capitals) {
+    rows.push(line({
+      date: c.entryDate,
+      kind: 'capital',
+      direction: IN,
+      amount: c.amount,
+      ref: c.capitalNumber,
+      title: `Capital from ${c.partnerName}`,
+      detail: c.notes || '',
+      link: `/capital/${c._id}`,
+    }));
+  }
+
+  for (const w of withdrawals) {
+    rows.push(line({
+      date: w.entryDate,
+      kind: 'withdrawal',
+      direction: OUT,
+      amount: w.amount,
+      ref: w.capital?.capitalNumber || '',
+      title: `Capital withdrawn by ${w.capital?.partnerName || 'partner'}`,
+      detail: w.notes || '',
+      link: w.capital ? `/capital/${w.capital._id}` : '',
+    }));
+  }
+
   for (const i of incomes) {
     rows.push(line({
       date: i.entryDate,
@@ -157,7 +210,7 @@ const net = (rows) =>
   round2(rows.reduce((sum, r) => sum + (r.direction === IN ? r.amount : -r.amount), 0));
 
 export const cashbook = asyncHandler(async (req, res) => {
-  const ownerId = req.user._id;
+  const ownerId = req.shopId;
   const from = req.query.from ? new Date(req.query.from) : null;
   const to = req.query.to ? new Date(req.query.to) : null;
   if (to) to.setDate(to.getDate() + 1); // ?to= is inclusive of that whole day

@@ -14,6 +14,13 @@ const settlementSchema = new mongoose.Schema(
     note: { type: String, default: '', trim: true },
     receivedAt: { type: Date, default: Date.now },
 
+    // Set on a vendor (machine-wise) settlement. Its entries settle at what
+    // they were owed, and any gap between what the company paid and that is
+    // kept here, on the machine's running ledger, instead of in swipe profit.
+    // Paid 2,000 for 1,995 -> +5 (paid extra); 2,000 for 2,002 -> -2 (short).
+    machine: { type: mongoose.Schema.Types.ObjectId, ref: 'CardMachine', default: null, index: true },
+    difference: { type: Number, default: 0 },
+
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   },
   { timestamps: true }

@@ -71,7 +71,7 @@ export function buildFilter(query, ownerId) {
 export const listTransactions = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-  const filter = buildFilter(req.query, req.user._id);
+  const filter = buildFilter(req.query, req.shopId);
 
   const [items, total, totals] = await Promise.all([
     Transaction.find(filter)
@@ -109,7 +109,7 @@ export const listTransactions = asyncHandler(async (req, res) => {
 });
 
 export const getTransaction = asyncHandler(async (req, res) => {
-  const txn = await Transaction.findOne({ _id: req.params.id, shopOwner: req.user._id })
+  const txn = await Transaction.findOne({ _id: req.params.id, shopOwner: req.shopId })
     .populate('createdBy', 'name')
     .populate('machine', 'name cardCompany')
     .populate('customer', 'name mobile commissionPercent')
@@ -132,7 +132,7 @@ export const createTransaction = asyncHandler(async (req, res) => {
     });
   }
 
-  const { machine, customer } = await resolveRefs(body, req.user._id);
+  const { machine, customer } = await resolveRefs(body, req.shopId);
 
   const payload = {};
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
@@ -151,7 +151,7 @@ export const createTransaction = asyncHandler(async (req, res) => {
   }
   // The machine's rate is snapshotted, never typed per entry.
   payload.supplierPercent = machine.supplierPercent || 0;
-  payload.shopOwner = req.user._id;
+  payload.shopOwner = req.shopId;
   payload.createdBy = req.user._id;
 
   const txn = await Transaction.create(payload);
@@ -161,8 +161,9 @@ export const createTransaction = asyncHandler(async (req, res) => {
 export const updateTransaction = asyncHandler(async (req, res) => {
   // save() rather than findByIdAndUpdate so the pre-validate hook recalculates
   // every derived amount.
-  const txn = await Transaction.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const txn = await Transaction.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!txn) return res.status(404).json({ message: 'Transaction not found' });
+  const originalMachine = String(txn.machine);
 
   for (const key of EDITABLE) {
     if (req.body[key] !== undefined) txn[key] = req.body[key];
@@ -182,9 +183,10 @@ export const updateTransaction = asyncHandler(async (req, res) => {
   if (req.body.machine !== undefined || req.body.customer !== undefined) {
     const { machine, customer } = await resolveRefs(
       { machine: txn.machine, customer: txn.customer || undefined },
-      req.user._id
+      req.shopId
     );
-    if (req.body.machine !== undefined) txn.supplierPercent = machine.supplierPercent || 0;
+    // A different machine brings its own rate, unless one is typed below.
+    if (String(machine._id) !== originalMachine) txn.supplierPercent = machine.supplierPercent || 0;
     if (customer) {
       txn.customer = customer._id;
       txn.customerName = customer.name;
@@ -192,6 +194,17 @@ export const updateTransaction = asyncHandler(async (req, res) => {
     } else {
       txn.customer = null;
     }
+  }
+
+  // The card company sometimes charges a different rate on a swipe than the
+  // machine's usual one; a typed rate overrides the snapshot. The fee, the
+  // margin and what the company owes all follow from it on save.
+  if (req.body.supplierPercent !== undefined && req.body.supplierPercent !== '') {
+    const rate = Number(req.body.supplierPercent);
+    if (!(rate >= 0 && rate <= 100)) {
+      return res.status(400).json({ message: 'Supplier % must be between 0 and 100' });
+    }
+    txn.supplierPercent = rate;
   }
 
   txn.updatedBy = req.user._id;
@@ -206,7 +219,7 @@ export const setSettlement = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: 'Status must be pending or received' });
   }
 
-  const txn = await Transaction.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const txn = await Transaction.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!txn) return res.status(404).json({ message: 'Transaction not found' });
 
   if (status === 'received') {
@@ -236,7 +249,7 @@ export const bulkSettle = asyncHandler(async (req, res) => {
 
   // A pipeline update so every row settles at its own expected figure.
   const result = await Transaction.updateMany(
-    { _id: { $in: ids }, shopOwner: req.user._id, settlementStatus: 'pending' },
+    { _id: { $in: ids }, shopOwner: req.shopId, settlementStatus: 'pending' },
     [
       {
         $set: {
@@ -253,7 +266,7 @@ export const bulkSettle = asyncHandler(async (req, res) => {
 });
 
 export const deleteTransaction = asyncHandler(async (req, res) => {
-  const txn = await Transaction.findOneAndDelete({ _id: req.params.id, shopOwner: req.user._id });
+  const txn = await Transaction.findOneAndDelete({ _id: req.params.id, shopOwner: req.shopId });
   if (!txn) return res.status(404).json({ message: 'Transaction not found' });
   res.json({ message: `${txn.txnNumber} deleted` });
 });

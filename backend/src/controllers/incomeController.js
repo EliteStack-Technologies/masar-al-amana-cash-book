@@ -25,7 +25,7 @@ export function buildFilter(query, ownerId) {
 export const listIncome = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
-  const filter = buildFilter(req.query, req.user._id);
+  const filter = buildFilter(req.query, req.shopId);
 
   const [items, total, totals] = await Promise.all([
     Income.find(filter).sort({ entryDate: -1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
@@ -44,7 +44,7 @@ export const listIncome = asyncHandler(async (req, res) => {
 });
 
 export const getIncome = asyncHandler(async (req, res) => {
-  const income = await Income.findOne({ _id: req.params.id, shopOwner: req.user._id }).lean();
+  const income = await Income.findOne({ _id: req.params.id, shopOwner: req.shopId }).lean();
   if (!income) return res.status(404).json({ message: 'Income entry not found' });
   res.json({ income });
 });
@@ -54,7 +54,7 @@ export const createIncome = asyncHandler(async (req, res) => {
   if (!(Number(body.amount) > 0)) {
     return res.status(400).json({ message: 'Amount must be greater than 0' });
   }
-  const payload = { shopOwner: req.user._id, createdBy: req.user._id };
+  const payload = { shopOwner: req.shopId, createdBy: req.user._id };
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
 
   const income = await Income.create(payload);
@@ -62,7 +62,7 @@ export const createIncome = asyncHandler(async (req, res) => {
 });
 
 export const updateIncome = asyncHandler(async (req, res) => {
-  const income = await Income.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const income = await Income.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!income) return res.status(404).json({ message: 'Income entry not found' });
 
   for (const key of EDITABLE) if (req.body[key] !== undefined) income[key] = req.body[key];
@@ -72,7 +72,7 @@ export const updateIncome = asyncHandler(async (req, res) => {
 });
 
 export const deleteIncome = asyncHandler(async (req, res) => {
-  const income = await Income.findOneAndDelete({ _id: req.params.id, shopOwner: req.user._id });
+  const income = await Income.findOneAndDelete({ _id: req.params.id, shopOwner: req.shopId });
   if (!income) return res.status(404).json({ message: 'Income entry not found' });
   res.json({ message: `${income.incomeNumber} deleted` });
 });

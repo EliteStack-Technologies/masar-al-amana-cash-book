@@ -18,13 +18,13 @@ export function buildFilter(query, ownerId) {
 }
 
 export const listMachines = asyncHandler(async (req, res) => {
-  const filter = buildFilter(req.query, req.user._id);
+  const filter = buildFilter(req.query, req.shopId);
   const items = await CardMachine.find(filter).sort({ name: 1 }).lean();
   res.json({ items, total: items.length });
 });
 
 export const getMachine = asyncHandler(async (req, res) => {
-  const machine = await CardMachine.findOne({ _id: req.params.id, shopOwner: req.user._id }).lean();
+  const machine = await CardMachine.findOne({ _id: req.params.id, shopOwner: req.shopId }).lean();
   if (!machine) return res.status(404).json({ message: 'Machine not found' });
   res.json({ machine });
 });
@@ -34,7 +34,7 @@ export const createMachine = asyncHandler(async (req, res) => {
   if (!body.name || !String(body.name).trim()) {
     return res.status(400).json({ message: 'Machine name is required' });
   }
-  const payload = { shopOwner: req.user._id, createdBy: req.user._id };
+  const payload = { shopOwner: req.shopId, createdBy: req.user._id };
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
 
   const machine = await CardMachine.create(payload);
@@ -42,7 +42,7 @@ export const createMachine = asyncHandler(async (req, res) => {
 });
 
 export const updateMachine = asyncHandler(async (req, res) => {
-  const machine = await CardMachine.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const machine = await CardMachine.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!machine) return res.status(404).json({ message: 'Machine not found' });
 
   for (const key of EDITABLE) if (req.body[key] !== undefined) machine[key] = req.body[key];
@@ -53,15 +53,15 @@ export const updateMachine = asyncHandler(async (req, res) => {
 
 export const deleteMachine = asyncHandler(async (req, res) => {
   const [txns, customers] = await Promise.all([
-    Transaction.countDocuments({ machine: req.params.id, shopOwner: req.user._id }),
-    Customer.countDocuments({ machine: req.params.id, shopOwner: req.user._id }),
+    Transaction.countDocuments({ machine: req.params.id, shopOwner: req.shopId }),
+    Customer.countDocuments({ machine: req.params.id, shopOwner: req.shopId }),
   ]);
   if (txns || customers) {
     return res.status(409).json({
       message: `This machine is used by ${txns} transaction(s) and ${customers} customer(s). Set it inactive instead.`,
     });
   }
-  const machine = await CardMachine.findOneAndDelete({ _id: req.params.id, shopOwner: req.user._id });
+  const machine = await CardMachine.findOneAndDelete({ _id: req.params.id, shopOwner: req.shopId });
   if (!machine) return res.status(404).json({ message: 'Machine not found' });
   res.json({ message: `${machine.name} deleted` });
 });

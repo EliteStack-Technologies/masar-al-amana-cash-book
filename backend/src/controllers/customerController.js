@@ -26,7 +26,7 @@ export function buildFilter(query, ownerId) {
 export const listCustomers = asyncHandler(async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
-  const filter = buildFilter(req.query, req.user._id);
+  const filter = buildFilter(req.query, req.shopId);
 
   const [items, total] = await Promise.all([
     Customer.find(filter)
@@ -42,7 +42,7 @@ export const listCustomers = asyncHandler(async (req, res) => {
 });
 
 export const getCustomer = asyncHandler(async (req, res) => {
-  const customer = await Customer.findOne({ _id: req.params.id, shopOwner: req.user._id })
+  const customer = await Customer.findOne({ _id: req.params.id, shopOwner: req.shopId })
     .populate('machine', 'name cardCompany')
     .lean();
   if (!customer) return res.status(404).json({ message: 'Customer not found' });
@@ -54,7 +54,7 @@ export const createCustomer = asyncHandler(async (req, res) => {
   if (!body.name || !String(body.name).trim()) {
     return res.status(400).json({ message: 'Customer name is required' });
   }
-  const payload = { shopOwner: req.user._id, createdBy: req.user._id };
+  const payload = { shopOwner: req.shopId, createdBy: req.user._id };
   for (const key of EDITABLE) if (body[key] !== undefined) payload[key] = body[key];
   if (!payload.machine) payload.machine = null;
 
@@ -63,7 +63,7 @@ export const createCustomer = asyncHandler(async (req, res) => {
 });
 
 export const updateCustomer = asyncHandler(async (req, res) => {
-  const customer = await Customer.findOne({ _id: req.params.id, shopOwner: req.user._id });
+  const customer = await Customer.findOne({ _id: req.params.id, shopOwner: req.shopId });
   if (!customer) return res.status(404).json({ message: 'Customer not found' });
 
   for (const key of EDITABLE) {
@@ -75,13 +75,13 @@ export const updateCustomer = asyncHandler(async (req, res) => {
 });
 
 export const deleteCustomer = asyncHandler(async (req, res) => {
-  const used = await Transaction.countDocuments({ customer: req.params.id, shopOwner: req.user._id });
+  const used = await Transaction.countDocuments({ customer: req.params.id, shopOwner: req.shopId });
   if (used) {
     return res.status(409).json({
       message: `This customer has ${used} transaction(s). Set them to inactive instead of deleting.`,
     });
   }
-  const customer = await Customer.findOneAndDelete({ _id: req.params.id, shopOwner: req.user._id });
+  const customer = await Customer.findOneAndDelete({ _id: req.params.id, shopOwner: req.shopId });
   if (!customer) return res.status(404).json({ message: 'Customer not found' });
   res.json({ message: `${customer.name} deleted` });
 });
