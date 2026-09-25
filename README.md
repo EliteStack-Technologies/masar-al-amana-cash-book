@@ -139,8 +139,10 @@ re-derives every row if the formula ever changes.
 
 ## How the cash flows
 
-A **loan** is cash a customer puts into the shop, so you have a float to hand
-out. It is money you owe back. The dashboard shows the total still owed, the
+A **loan** is either **payable** - cash an account holder puts into the shop,
+so you have a float to hand out, and you owe it back - or **receivable** -
+cash the shop lends an account holder, which they owe back to you. Loans from
+before the split read as payable. The dashboard shows the total still owed, the
 money still sitting with the card company, and the cash you should have left.
 
 The **cash book** (`/cashbook`) is every movement in one ledger with a running
@@ -148,8 +150,11 @@ balance:
 
 | Entry | Cash |
 | ----- | ---- |
-| Loan taken from a customer | **in** |
-| Repayment to that customer | out |
+| Payable loan taken in | **in** |
+| Repayment of a payable loan | out |
+| Receivable loan lent out | out |
+| Collection on a receivable loan | **in** |
+| Profit settled to a partner | out |
 | Cash handed over on a swipe | out |
 | Settlement from the card company | **in** |
 | Income | **in** |
@@ -169,7 +174,8 @@ swipe, and the company's payment on the day it actually arrived.
 | **Card Machines** | Add/edit the machines you swipe on (name, card company, supplier %, device id, status) |
 | **New Transaction** | Pick a machine (tappable cards showing each supplier %, first pre-selected); optionally pick a saved customer or leave it a walk-in; one amount plus whether it includes commission or takes it on top, your %, the derived figure to round, card ref, notes — with a live panel showing swipe, charge, supplier fee, margin and supplier A/C |
 | **Income / Expenses** | Record other money in and out, by category (managed list) and receiver/payee; per-list totals |
-| **Loans** | Cash customers put into the shop, by customer, with repayments and a running outstanding balance; opens on a customer-wise settlement view |
+| **Loans** | Payable and receivable tabs: loans taken in and repaid, loans lent out and collected, each by account with a running outstanding balance |
+| **Profit & loss** | Month or all time: swipe profit on settled swipes, vendor settlement extra/short, other income, less expenses = net profit. **Settle profit** pays it out to a partner (a capital account) and shows what is still unsettled |
 | **Categories** | Manage the income and expense category lists |
 | **More** | Hub linking Customers, Machines, Income, Expenses, Loans, Settlements, Categories and Profile |
 | **Transactions** | Search by mobile / txn no / card ref / amount, filter by status and date range, running totals for the filtered set, paginated |
@@ -203,8 +209,10 @@ auth cookie.
 | GET · POST · PATCH · DELETE | `/categories` · `/categories/:id` | Income/expense categories (`?kind=`) |
 | GET · POST · GET · PATCH · DELETE | `/income` · `/income/:id` | Income entries — `q`, `category`, `from`, `to` |
 | GET · POST · GET · PATCH · DELETE | `/expenses` · `/expenses/:id` | Expense entries — `q`, `category`, `from`, `to` |
-| GET · POST · GET · PATCH · DELETE | `/loans` · `/loans/:id` | Loans — `q`, `status`, `from`, `to` |
-| POST · DELETE | `/loans/:id/settlements[/:settlementId]` | Record / remove a loan repayment |
+| GET · POST · GET · PATCH · DELETE | `/loans` · `/loans/:id` | Loans — `direction` (`payable`/`receivable`), `q`, `status`, `from`, `to` |
+| POST · DELETE | `/loans/:id/settlements[/:settlementId]` | Record / remove a loan repayment or collection |
+| GET | `/pl?month=YYYY-MM` | Profit & loss for a month (or all time without `month`), profit settled, by partner |
+| POST · DELETE | `/pl/settlements[/:id]` | Settle profit to a partner / remove it |
 | GET | `/transactions` | List — `q`, `status`, `customer`, `machine`, `from`, `to`, `minAmount`, `maxAmount`, `page`, `limit` |
 | POST | `/transactions` | Create (requires `machine` + `customer`; snapshots the customer) |
 | GET | `/transactions/:id` | One transaction |
@@ -221,7 +229,7 @@ auth cookie.
 | GET | `/reports/customers?month=YYYY-MM` | Totals per customer |
 | GET | `/reports/machines?month=YYYY-MM` | Totals per machine |
 | GET | `/reports/settlement` | Pending settlements |
-| GET | `/export/excel?type=…` | `.xlsx` — `daily`, `weekly`, `monthly`, `commission`, `settlement`, `transactions`, `income`, `expenses`, `loans`, `customers`, `machines`, `customer-report`, `machine-report` |
+| GET | `/export/excel?type=…` | `.xlsx` — `daily`, `weekly`, `monthly`, `commission`, `settlement`, `transactions`, `income`, `expenses`, `loans`, `customers`, `machines`, `customer-report`, `machine-report`, `pl` |
 | GET | `/export/pdf?type=…` | `.pdf` — same types |
 
 ---

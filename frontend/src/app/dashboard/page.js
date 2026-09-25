@@ -79,12 +79,22 @@ export default function DashboardPage() {
             </SectionTitle>
             <Card className="p-0">
               <div className="grid grid-cols-2">
-                <div className="border-r border-[var(--rule)] p-3.5">
-                  <Figure label="Taken in" value={money(data.loans.taken)} sub={`${data.loans.count} loans`} />
-                </div>
-                <div className="p-3.5">
-                  <Figure label="Still owed" value={money(data.loans.outstanding)} tone="stamp" sub={`${data.loans.openCount} still open`} />
-                </div>
+                <Link href="/loans" className="border-r border-[var(--rule)] p-3.5 active:bg-[var(--paper-2)]">
+                  <Figure
+                    label="Payable · you owe"
+                    value={money(data.loans.outstanding)}
+                    tone="stamp"
+                    sub={`${data.loans.openCount} open · ${money(data.loans.taken)} taken in`}
+                  />
+                </Link>
+                <Link href="/loans?direction=receivable" className="p-3.5 active:bg-[var(--paper-2)]">
+                  <Figure
+                    label="Receivable · owed to you"
+                    value={money(data.loans.receivable.outstanding)}
+                    tone="leaf"
+                    sub={`${data.loans.receivable.openCount} open · ${money(data.loans.receivable.taken)} lent out`}
+                  />
+                </Link>
               </div>
             </Card>
           </section>

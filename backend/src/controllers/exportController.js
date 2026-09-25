@@ -3,11 +3,13 @@ import PDFDocument from 'pdfkit';
 import Transaction from '../models/Transaction.js';
 import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
-import Loan from '../models/Loan.js';
+import Loan, { directionMatch } from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
 import LoanAccount from '../models/LoanAccount.js';
 import Customer from '../models/Customer.js';
 import CardMachine from '../models/CardMachine.js';
+import ProfitSettlement from '../models/ProfitSettlement.js';
+import { profitAndLoss, plWindow } from './plController.js';
 import { asyncHandler } from '../middleware/error.js';
 import { buildFilter } from './transactionController.js';
 import {
@@ -29,6 +31,10 @@ const fmtDay = (d) =>
         timeZone: TZ(), day: '2-digit', month: 'short', year: 'numeric',
       }).format(new Date(d))
     : '';
+
+const LOAN_TYPE = { payable: 'Payable', receivable: 'Receivable' };
+/** ?direction= narrowed to one side of the loan book, or null for both. */
+const loanSide = (v) => (LOAN_TYPE[v] ? v : null);
 
 /* --- Column definitions per dataset. `money: true` marks amount columns. --- */
 const TXN_COLUMNS = [
@@ -129,21 +135,31 @@ const LOAN_COLUMNS = [
   { header: 'Account', key: 'lenderName', width: 20, pdf: 110 },
   { header: 'Mobile', key: 'lenderMobile', width: 14, pdf: 80 },
   { header: 'Date', key: 'date', width: 16, pdf: 84 },
-  { header: 'Loan Taken', key: 'principal', width: 13, pdf: 74, money: true },
-  { header: 'Repaid', key: 'settledAmount', width: 13, pdf: 74, money: true },
-  { header: 'Outstanding', key: 'outstanding', width: 13, pdf: 74, money: true },
-  { header: 'Status', key: 'status', width: 10, pdf: 54 },
+  { header: 'Type', key: 'type', width: 11, pdf: 58 },
+  { header: 'Amount', key: 'principal', width: 13, pdf: 70, money: true },
+  { header: 'Settled', key: 'settledAmount', width: 13, pdf: 70, money: true },
+  { header: 'Outstanding', key: 'outstanding', width: 13, pdf: 70, money: true },
+  { header: 'Status', key: 'status', width: 10, pdf: 48 },
 ];
 
 const ACCOUNT_LOAN_COLUMNS = [
   { header: 'Loan No', key: 'loanNumber', width: 14, pdf: 80 },
   { header: 'Date', key: 'date', width: 16, pdf: 90 },
-  { header: 'Loan Taken', key: 'principal', width: 14, pdf: 84, money: true },
-  { header: 'Repaid', key: 'settledAmount', width: 14, pdf: 84, money: true },
+  { header: 'Type', key: 'type', width: 11, pdf: 60 },
+  { header: 'Amount', key: 'principal', width: 14, pdf: 76, money: true },
+  { header: 'Settled', key: 'settledAmount', width: 14, pdf: 76, money: true },
   { header: 'Outstanding', key: 'outstanding', width: 14, pdf: 84, money: true },
-  { header: 'Repayments', key: 'repayments', width: 12, pdf: 70 },
-  { header: 'Status', key: 'status', width: 10, pdf: 60 },
-  { header: 'Notes', key: 'notes', width: 26, pdf: 150 },
+  { header: 'Repayments', key: 'repayments', width: 12, pdf: 60 },
+  { header: 'Status', key: 'status', width: 10, pdf: 50 },
+  { header: 'Notes', key: 'notes', width: 26, pdf: 120 },
+];
+
+const PL_SETTLEMENT_COLUMNS = [
+  { header: 'No', key: 'settlementNumber', width: 12, pdf: 70 },
+  { header: 'Date', key: 'date', width: 16, pdf: 90 },
+  { header: 'Partner', key: 'partnerName', width: 22, pdf: 130 },
+  { header: 'Amount', key: 'amount', width: 14, pdf: 90, money: true },
+  { header: 'Notes', key: 'notes', width: 30, pdf: 200 },
 ];
 
 const CUSTOMER_COLUMNS = [
@@ -293,21 +309,35 @@ async function gatherReport(query, ownerId) {
   }
 
   if (type === 'loans') {
-    const rows = await Loan.find({ shopOwner: ownerId }).sort({ entryDate: -1 }).lean();
+    const side = loanSide(query.direction);
+    const rows = await Loan.find({ shopOwner: ownerId, ...(side ? directionMatch(side) : {}) })
+      .sort({ entryDate: -1 }).lean();
     const t = await loanTotals(ownerId);
+    const payableLines = [
+      ['Payable loans', t.count, false],
+      ['Payable taken in', t.taken, true],
+      ['Payable repaid', t.repaid, true],
+      ['Payable still owed', t.outstanding, true],
+    ];
+    const receivableLines = [
+      ['Receivable loans', t.receivable.count, false],
+      ['Receivable lent out', t.receivable.taken, true],
+      ['Receivable collected', t.receivable.repaid, true],
+      ['Receivable still due', t.receivable.outstanding, true],
+    ];
     return {
-      title: 'Loans', fileBase: 'loans-' + todayStr(),
+      title: side ? `Loans ${LOAN_TYPE[side].toLowerCase()}` : 'Loans',
+      fileBase: 'loans-' + (side ? side + '-' : '') + todayStr(),
       columns: LOAN_COLUMNS,
       rows: rows.map((r) => ({
         ...r,
+        type: LOAN_TYPE[r.direction || 'payable'],
         date: fmtDay(r.entryDate),
         outstanding: Math.max(0, Math.round((r.principal - r.settledAmount) * 100) / 100),
       })),
       summaryLines: [
-        ['Loans', t.count, false],
-        ['Total loan taken', t.taken, true],
-        ['Total repaid', t.repaid, true],
-        ['Total outstanding', t.outstanding, true],
+        ...(side !== 'receivable' ? payableLines : []),
+        ...(side !== 'payable' ? receivableLines : []),
       ],
     };
   }
@@ -317,7 +347,12 @@ async function gatherReport(query, ownerId) {
     const account = await LoanAccount.findOne({ _id: query.accountId, shopOwner: ownerId }).lean();
     if (!account) throw Object.assign(new Error('Account not found'), { status: 404 });
 
-    const loans = await Loan.find({ shopOwner: ownerId, account: account._id })
+    const side = loanSide(query.direction);
+    const loans = await Loan.find({
+      shopOwner: ownerId,
+      account: account._id,
+      ...(side ? directionMatch(side) : {}),
+    })
       .sort({ entryDate: -1, createdAt: -1 }).lean();
 
     const counts = await LoanSettlement.aggregate([
@@ -335,6 +370,7 @@ async function gatherReport(query, ownerId) {
       columns: ACCOUNT_LOAN_COLUMNS,
       rows: loans.map((l) => ({
         ...l,
+        type: LOAN_TYPE[l.direction || 'payable'],
         date: fmtDay(l.entryDate),
         outstanding: Math.max(0, Math.round((l.principal - l.settledAmount) * 100) / 100),
         repayments: byLoan.get(String(l._id)) || 0,
@@ -346,9 +382,36 @@ async function gatherReport(query, ownerId) {
         ['Loans', loans.length, false],
         ['Open loans', loans.filter((l) => l.status === 'open').length, false],
         ['Closed loans', loans.filter((l) => l.status === 'closed').length, false],
-        ['Total put in', taken, true],
-        ['Total repaid', repaid, true],
-        ['Still owed', Math.max(0, taken - repaid), true],
+        ['Total amount', taken, true],
+        ['Total settled', repaid, true],
+        ['Outstanding', Math.max(0, taken - repaid), true],
+      ],
+    };
+  }
+
+  // Profit & loss for the same window as the P/L screen (see plWindow), with
+  // the profit shared out to partners in that window as its rows.
+  if (type === 'pl') {
+    const { range, label } = plWindow(query);
+    const match = { shopOwner: ownerId };
+    if (range) match.entryDate = { $gte: range.from, $lt: range.to };
+    const [pl, rows] = await Promise.all([
+      profitAndLoss(ownerId, range),
+      ProfitSettlement.find(match).sort({ entryDate: -1 }).lean(),
+    ]);
+    return {
+      title: 'Profit & Loss - ' + label,
+      fileBase: 'profit-loss-' + label.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      columns: PL_SETTLEMENT_COLUMNS,
+      rows: rows.map((r) => ({ ...r, date: fmtDay(r.entryDate) })),
+      summaryLines: [
+        ['Swipe profit', pl.swipeProfit, true],
+        ['Settlement difference', pl.settleDiff, true],
+        ['Other income', pl.income, true],
+        ['Expenses', -pl.expense, true],
+        ['Net profit', pl.net, true],
+        ['Profit settled', pl.settled, true],
+        ['Unsettled profit', pl.unsettled, true],
       ],
     };
   }

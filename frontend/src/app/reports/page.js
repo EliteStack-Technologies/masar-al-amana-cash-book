@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { AppShell } from '@/components/AppShell';
 
 import {
-  IconCalendar, IconChevron, IconClock, IconMachine,
+  IconCalendar, IconChart, IconChevron, IconClock, IconMachine,
 } from '@/components/Icons';
 
 const REPORTS = [
@@ -13,6 +13,12 @@ const REPORTS = [
     icon: IconCalendar,
     title: 'Period report',
     detail: 'Daily, weekly or monthly — switch at the top of the report',
+  },
+  {
+    href: '/pl',
+    icon: IconChart,
+    title: 'Profit & loss',
+    detail: 'Net profit by month, and settle it out to partners',
   },
   {
     href: '/reports/machines',
