@@ -7,13 +7,16 @@ import Capital from '../models/Capital.js';
 import CapitalWithdrawal from '../models/CapitalWithdrawal.js';
 import Settlement from '../models/Settlement.js';
 import OpeningBalance from '../models/OpeningBalance.js';
+import ProfitSettlement from '../models/ProfitSettlement.js';
 import { asyncHandler } from '../middleware/error.js';
 import { round2 } from '../utils/calc.js';
 
 /**
  * One ledger for the whole book. Every entry the shop makes - opening
- * balances, swipes, the settlements that pay them back, loans taken from
- * customers, repayments, capital put in and withdrawn, income and expenses - lands here as a single cash-in or cash-out line.
+ * balances, swipes, the settlements that pay them back, loans taken in and
+ * repaid, loans lent out and collected back, capital put in and withdrawn,
+ * profit shared out, income and expenses - lands here as a single cash-in or
+ * cash-out line.
  *
  * A swipe puts out two separate lines: the cash handed over on the day of the
  * swipe, and the company's payment on the day it actually arrived. That is
@@ -36,7 +39,7 @@ async function collect(ownerId, from, to) {
     return m;
   };
 
-  const [txns, loans, repayments, incomes, expenses, openings, capitals, withdrawals, vendorDiffs] = await Promise.all([
+  const [txns, loans, repayments, incomes, expenses, openings, capitals, withdrawals, vendorDiffs, profitOuts] = await Promise.all([
     // Swipes are pulled on either date, then split into their two lines.
     Transaction.find({
       shopOwner: ownerId,
@@ -48,7 +51,7 @@ async function collect(ownerId, from, to) {
       .sort({ txnDate: 1 })
       .lean(),
     Loan.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
-    LoanSettlement.find(rangeMatch('entryDate')).populate('loan', 'loanNumber lenderName').sort({ entryDate: 1 }).lean(),
+    LoanSettlement.find(rangeMatch('entryDate')).populate('loan', 'loanNumber lenderName direction').sort({ entryDate: 1 }).lean(),
     Income.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
     Expense.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
     OpeningBalance.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
@@ -59,6 +62,7 @@ async function collect(ownerId, from, to) {
       .populate('machine', 'name cardCompany')
       .sort({ receivedAt: 1 })
       .lean(),
+    ProfitSettlement.find(rangeMatch('entryDate')).sort({ entryDate: 1 }).lean(),
   ]);
 
   const rows = [];
@@ -107,27 +111,33 @@ async function collect(ownerId, from, to) {
     }
   }
 
+  // A payable loan brings cash in and its repayments take it out; a
+  // receivable loan is the other way round.
   for (const l of loans) {
+    const lent = l.direction === 'receivable';
     rows.push(line({
       date: l.entryDate,
-      kind: 'loan',
-      direction: IN,
+      kind: lent ? 'lend' : 'loan',
+      direction: lent ? OUT : IN,
       amount: l.principal,
       ref: l.loanNumber,
-      title: `Loan from ${l.lenderName}`,
+      title: lent ? `Loan to ${l.lenderName}` : `Loan from ${l.lenderName}`,
       detail: l.notes || '',
       link: `/loans/${l._id}`,
     }));
   }
 
   for (const r of repayments) {
+    const collected = (r.loan?.direction || r.direction) === 'receivable';
     rows.push(line({
       date: r.entryDate,
-      kind: 'repayment',
-      direction: OUT,
+      kind: collected ? 'collection' : 'repayment',
+      direction: collected ? IN : OUT,
       amount: r.amount,
       ref: r.loan?.loanNumber || '',
-      title: `Repaid ${r.loan?.lenderName || 'lender'}`,
+      title: collected
+        ? `Collected from ${r.loan?.lenderName || 'borrower'}`
+        : `Repaid ${r.loan?.lenderName || 'lender'}`,
       detail: r.notes || '',
       link: r.loan ? `/loans/${r.loan._id}` : '',
     }));
@@ -172,6 +182,19 @@ async function collect(ownerId, from, to) {
       title: `Capital withdrawn by ${w.capital?.partnerName || 'partner'}`,
       detail: w.notes || '',
       link: w.capital ? `/capital/${w.capital._id}` : '',
+    }));
+  }
+
+  for (const p of profitOuts) {
+    rows.push(line({
+      date: p.entryDate,
+      kind: 'profit-out',
+      direction: OUT,
+      amount: p.amount,
+      ref: p.settlementNumber,
+      title: `Profit to ${p.partnerName}`,
+      detail: p.notes || '',
+      link: '/pl',
     }));
   }
 

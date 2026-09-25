@@ -1,10 +1,13 @@
-import Loan from '../models/Loan.js';
+import Loan, { DIRECTIONS, directionMatch } from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
 import LoanAccount from '../models/LoanAccount.js';
 import { asyncHandler } from '../middleware/error.js';
 import { round2 } from '../utils/calc.js';
 
 const EDITABLE = ['account', 'lenderName', 'lenderMobile', 'principal', 'entryDate', 'notes'];
+
+/** 'payable' or 'receivable' from a request value; anything else is null. */
+const pickDirection = (v) => (DIRECTIONS.includes(v) ? v : null);
 
 /** Case-insensitive exact name match, so "rashid" finds "Rashid". */
 const findAccountByName = (ownerId, name) =>
@@ -66,6 +69,8 @@ export const listAccounts = asyncHandler(async (req, res) => {
 
 export function buildFilter(query, ownerId) {
   const filter = { shopOwner: ownerId };
+  const direction = pickDirection(query.direction);
+  if (direction) Object.assign(filter, directionMatch(direction));
   if (query.status === 'open' || query.status === 'closed') filter.status = query.status;
 
   if (query.from || query.to) {
@@ -100,8 +105,10 @@ export const listLoans = asyncHandler(async (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
   await adoptLegacyLoans(req.shopId);
   const filter = buildFilter(req.query, req.shopId);
+  const direction = pickDirection(req.query.direction);
+  const accountMatch = { shopOwner: req.shopId, ...(direction ? directionMatch(direction) : {}) };
 
-  const [items, total, totals, byAccount] = await Promise.all([
+  const [items, total, totals, byAccount, byDirection] = await Promise.all([
     Loan.find(filter).sort({ entryDate: -1, createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     Loan.countDocuments(filter),
     Loan.aggregate([
@@ -114,9 +121,9 @@ export const listLoans = asyncHandler(async (req, res) => {
         },
       },
     ]),
-    // Account-wise position, so the loan screen can be read per lender.
+    // Account-wise position, so the loan screen can be read per account.
     Loan.aggregate([
-      { $match: { shopOwner: req.shopId } },
+      { $match: accountMatch },
       { $sort: { entryDate: 1 } },
       {
         $group: {
@@ -131,7 +138,28 @@ export const listLoans = asyncHandler(async (req, res) => {
       },
       { $sort: { taken: -1 } },
     ]),
+    // Payable and receivable side by side, whatever tab is open.
+    Loan.aggregate([
+      { $match: { shopOwner: req.shopId } },
+      {
+        $group: {
+          _id: { $ifNull: ['$direction', 'payable'] },
+          principal: { $sum: '$principal' },
+          settled: { $sum: '$settledAmount' },
+          count: { $sum: 1 },
+        },
+      },
+    ]),
   ]);
+
+  const position = Object.fromEntries(
+    DIRECTIONS.map((d) => {
+      const r = byDirection.find((x) => x._id === d);
+      const amount = round2(r?.principal || 0);
+      const settledSum = round2(r?.settled || 0);
+      return [d, { taken: amount, settled: settledSum, outstanding: round2(Math.max(0, amount - settledSum)), count: r?.count || 0 }];
+    })
+  );
 
   const taken = round2(totals[0]?.principal || 0);
   const settled = round2(totals[0]?.settled || 0);
@@ -142,6 +170,7 @@ export const listLoans = asyncHandler(async (req, res) => {
     total,
     pages: Math.ceil(total / limit) || 1,
     totals: { taken, settled, outstanding: round2(Math.max(0, taken - settled)) },
+    position,
     byAccount: byAccount.map((r) => ({
       accountId: r._id,
       name: r.name,
@@ -167,7 +196,12 @@ export const accountLoans = asyncHandler(async (req, res) => {
   }).lean();
   if (!account) return res.status(404).json({ message: 'Account not found' });
 
-  const loans = await Loan.find({ shopOwner: req.shopId, account: account._id })
+  const direction = pickDirection(req.query.direction);
+  const loans = await Loan.find({
+    shopOwner: req.shopId,
+    account: account._id,
+    ...(direction ? directionMatch(direction) : {}),
+  })
     .sort({ entryDate: -1, createdAt: -1 })
     .lean();
 
@@ -204,6 +238,7 @@ export const accountLoans = asyncHandler(async (req, res) => {
       mobile: account.mobile || '',
       notes: account.notes || '',
     },
+    direction,
     loans: rows,
     // Flat timeline across every loan, newest first.
     settlements: settlements.map((s) => ({
@@ -249,6 +284,7 @@ export const createLoan = asyncHandler(async (req, res) => {
   payload.account = account._id;
   payload.lenderName = account.name;
   payload.lenderMobile = account.mobile || '';
+  payload.direction = pickDirection(body.direction) || 'payable';
 
   const loan = await Loan.create(payload);
   res.status(201).json({ loan: loan.toJSON() });
@@ -264,6 +300,12 @@ export const updateLoan = asyncHandler(async (req, res) => {
     loan.account = account._id;
     loan.lenderName = account.name;
     loan.lenderMobile = account.mobile || '';
+  }
+  const direction = pickDirection(req.body.direction);
+  if (direction && direction !== (loan.direction || 'payable')) {
+    loan.direction = direction;
+    // Its repayments now move cash the other way too.
+    await LoanSettlement.updateMany({ loan: loan._id }, { direction });
   }
   loan.updatedBy = req.user._id;
   // Principal may have changed, so re-evaluate open/closed.
@@ -291,6 +333,7 @@ export const addSettlement = asyncHandler(async (req, res) => {
   await LoanSettlement.create({
     shopOwner: req.shopId,
     loan: loan._id,
+    direction: loan.direction || 'payable',
     amount: Number(req.body.amount),
     entryDate: req.body.entryDate || Date.now(),
     notes: req.body.notes || '',

@@ -1,13 +1,14 @@
 import Transaction from '../models/Transaction.js';
 import Income from '../models/Income.js';
 import Expense from '../models/Expense.js';
-import Loan from '../models/Loan.js';
+import Loan, { directionMatch } from '../models/Loan.js';
 import LoanSettlement from '../models/LoanSettlement.js';
 import Capital from '../models/Capital.js';
 import CapitalWithdrawal from '../models/CapitalWithdrawal.js';
 import CardMachine from '../models/CardMachine.js';
 import Settlement from '../models/Settlement.js';
 import OpeningBalance from '../models/OpeningBalance.js';
+import ProfitSettlement from '../models/ProfitSettlement.js';
 import { asyncHandler } from '../middleware/error.js';
 import { dayRange, weekRange, monthRange, todayStr, TZ } from '../utils/dates.js';
 import { round2 } from '../utils/calc.js';
@@ -68,9 +69,12 @@ export async function summarise(ownerId, range, extra) {
   return tidy(row);
 }
 
-/** Amount + count for a simple money model (Income / Expense / Loan). */
-export async function moneySum(Model, ownerId, range, field = 'amount') {
-  const match = { shopOwner: ownerId };
+/**
+ * Amount + count for a simple money model (Income / Expense / Loan).
+ * `extra` narrows the match, e.g. directionMatch('receivable') for loans.
+ */
+export async function moneySum(Model, ownerId, range, field = 'amount', extra = {}) {
+  const match = { shopOwner: ownerId, ...extra };
   if (range) match.entryDate = { $gte: range.from, $lt: range.to };
   const [row] = await Model.aggregate([
     { $match: match },
@@ -79,10 +83,10 @@ export async function moneySum(Model, ownerId, range, field = 'amount') {
   return { amount: round2(row?.amount || 0), count: row?.count || 0 };
 }
 
-/** All-time loan position: cash taken in, repaid, still owed to lenders. */
-export async function loanTotals(ownerId) {
+/** All-time position of one side of the loan book. */
+async function loanSide(ownerId, direction) {
   const [row] = await Loan.aggregate([
-    { $match: { shopOwner: ownerId } },
+    { $match: { shopOwner: ownerId, ...directionMatch(direction) } },
     {
       $group: {
         _id: null,
@@ -102,6 +106,19 @@ export async function loanTotals(ownerId) {
     count: row?.count || 0,
     openCount: row?.openCount || 0,
   };
+}
+
+/**
+ * All-time loan position. The top level is the payable side - cash taken in,
+ * repaid, still owed to lenders - and `receivable` is the cash the shop has
+ * lent out: `taken` given, `repaid` collected back, `outstanding` still due.
+ */
+export async function loanTotals(ownerId) {
+  const [payable, receivable] = await Promise.all([
+    loanSide(ownerId, 'payable'),
+    loanSide(ownerId, 'receivable'),
+  ]);
+  return { ...payable, receivable };
 }
 
 /** All-time capital position: put in by partners, withdrawn, still in the shop. */
@@ -127,32 +144,38 @@ export async function capitalTotals(ownerId) {
   };
 }
 
-/** Loans taken + repayments made inside a date window (for period reports). */
+/**
+ * Loan movements inside a date window (for period reports): payable loans
+ * taken and repaid, and receivable loans given out and collected back.
+ */
 async function loanActivity(ownerId, range) {
-  const [givenRow] = await Loan.aggregate([
-    { $match: { shopOwner: ownerId, entryDate: { $gte: range.from, $lt: range.to } } },
-    { $group: { _id: null, amount: { $sum: '$principal' }, count: { $sum: 1 } } },
+  const payable = directionMatch('payable');
+  const receivable = directionMatch('receivable');
+  const [taken, repaid, given, collected] = await Promise.all([
+    moneySum(Loan, ownerId, range, 'principal', payable),
+    moneySum(LoanSettlement, ownerId, range, 'amount', payable),
+    moneySum(Loan, ownerId, range, 'principal', receivable),
+    moneySum(LoanSettlement, ownerId, range, 'amount', receivable),
   ]);
-  const [repaidRow] = await LoanSettlement.aggregate([
-    { $match: { shopOwner: ownerId, entryDate: { $gte: range.from, $lt: range.to } } },
-    { $group: { _id: null, amount: { $sum: '$amount' }, count: { $sum: 1 } } },
-  ]);
-  return {
-    taken: { amount: round2(givenRow?.amount || 0), count: givenRow?.count || 0 },
-    repaid: { amount: round2(repaidRow?.amount || 0), count: repaidRow?.count || 0 },
-  };
+  return { taken, repaid, given, collected };
 }
 
 /**
  * Cash actually in the drawer, all time: the opening balance, capital and the
- * loan float that came in, less what has been repaid, withdrawn and handed to
- * customers, plus what the card company and other income have paid back.
+ * loan float that came in, less what has been repaid, withdrawn, lent out,
+ * shared out as profit and handed to customers, plus what the card company,
+ * borrowers paying back and other income have brought in.
  */
 export async function cashPosition(ownerId) {
-  const [txns, loans, repaid, income, expense, opening, capital, withdrawn, vendorDiff] = await Promise.all([
+  const payable = directionMatch('payable');
+  const receivable = directionMatch('receivable');
+  const [
+    txns, loans, repaid, income, expense, opening, capital, withdrawn, vendorDiff,
+    lent, collected, profitOut,
+  ] = await Promise.all([
     summarise(ownerId, null),
-    moneySum(Loan, ownerId, null, 'principal'),
-    moneySum(LoanSettlement, ownerId, null),
+    moneySum(Loan, ownerId, null, 'principal', payable),
+    moneySum(LoanSettlement, ownerId, null, 'amount', payable),
     moneySum(Income, ownerId, null),
     moneySum(Expense, ownerId, null),
     moneySum(OpeningBalance, ownerId, null),
@@ -161,11 +184,15 @@ export async function cashPosition(ownerId) {
     // Vendor settlements settle swipes at what was owed; what the company paid
     // over (+) or under (-) that is held here.
     moneySum(Settlement, ownerId, null, 'difference'),
+    moneySum(Loan, ownerId, null, 'principal', receivable),
+    moneySum(LoanSettlement, ownerId, null, 'amount', receivable),
+    moneySum(ProfitSettlement, ownerId, null),
   ]);
 
   return {
     inHand: round2(
       opening.amount + capital.amount - withdrawn.amount + loans.amount - repaid.amount -
+        lent.amount + collected.amount - profitOut.amount -
         txns.givenAmount + txns.receivedAmount + vendorDiff.amount + income.amount - expense.amount
     ),
     vendorDifference: vendorDiff.amount,
@@ -174,6 +201,9 @@ export async function cashPosition(ownerId) {
     capitalWithdrawn: withdrawn.amount,
     loanTaken: loans.amount,
     loanRepaid: repaid.amount,
+    loanLent: lent.amount,
+    loanCollected: collected.amount,
+    profitSettled: profitOut.amount,
     givenOut: txns.givenAmount,
     settled: txns.receivedAmount,
     income: income.amount,

@@ -15,7 +15,7 @@ const findAccountByName = (ownerId, name) =>
  * picked from the capital accounts list. A name with no match opens a new
  * account on the spot - the add-capital screen asks for nothing else.
  */
-async function resolveAccount(body, ownerId, userId) {
+export async function resolveAccount(body, ownerId, userId) {
   if (body.account) {
     const account = await CapitalAccount.findOne({ _id: body.account, shopOwner: ownerId });
     if (!account) throw Object.assign(new Error('Account not found'), { status: 404 });

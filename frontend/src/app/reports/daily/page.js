@@ -84,6 +84,8 @@ function DailyReport() {
                   <Row label="Expenses" value={data.expense.amount} tone="stamp" />
                   <Row label="Loans taken" value={data.loans.taken.amount} />
                   <Row label="Loan repayments" value={data.loans.repaid.amount} tone="leaf" />
+                  <Row label="Loans lent out" value={data.loans.given?.amount || 0} tone="stamp" />
+                  <Row label="Loans collected" value={data.loans.collected?.amount || 0} tone="leaf" />
                 </Card>
               </section>
             )}

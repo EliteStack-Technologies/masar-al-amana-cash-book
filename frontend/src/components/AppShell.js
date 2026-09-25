@@ -30,7 +30,7 @@ const isActive = (pathname, href) => {
     // The More hub is the home for these sections, so light it up on all of them.
     return [
       '/more', '/customers', '/machines', '/income', '/expenses', '/loans',
-      '/capital', '/settlements', '/categories', '/profile', '/opening',
+      '/capital', '/settlements', '/categories', '/profile', '/opening', '/pl',
     ].some((p) => pathname === p || pathname.startsWith(`${p}/`));
   }
   return pathname === href || pathname.startsWith(`${href}/`);

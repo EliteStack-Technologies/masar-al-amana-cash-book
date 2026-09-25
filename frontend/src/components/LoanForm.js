@@ -3,9 +3,48 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { toLocalInput } from '@/lib/format';
-import { Button, Card, ErrorNote, Field, SectionTitle, Skeleton } from '@/components/ui';
+import { Button, Card, ErrorNote, Field, SectionTitle, Segmented, Skeleton } from '@/components/ui';
 
-export const emptyLoan = () => ({
+/**
+ * The two sides of the loan book, and how each one reads on screen.
+ * payable - an account lent the shop cash; the shop repays it.
+ * receivable - the shop lent an account cash; they pay it back.
+ */
+export const LOAN_SIDES = {
+  payable: {
+    label: 'Payable',
+    blurb: 'Cash you borrowed',
+    who: 'Who gave the cash',
+    amount: 'Taken in',
+    outstanding: 'You owe',
+    settled: 'Repaid',
+    settle: 'repayment',
+    settleTitle: 'Record a repayment',
+    settleButton: 'Add repayment',
+    settledShort: 'back',
+    empty: 'Record the cash an account holder puts into the shop, and the repayments as they go back.',
+  },
+  receivable: {
+    label: 'Receivable',
+    blurb: 'Cash you lent out',
+    who: 'Who took the cash',
+    amount: 'Lent out',
+    outstanding: 'Owed to you',
+    settled: 'Collected',
+    settle: 'collection',
+    settleTitle: 'Record money collected',
+    settleButton: 'Add collection',
+    settledShort: 'in',
+    empty: 'Record the cash the shop lends to an account holder, and the money as it comes back.',
+  },
+};
+
+export const sideOf = (loan) => (loan?.direction === 'receivable' ? 'receivable' : 'payable');
+
+export const SIDE_OPTIONS = Object.entries(LOAN_SIDES).map(([value, s]) => ({ value, label: s.label }));
+
+export const emptyLoan = (direction = 'payable') => ({
+  direction,
   account: '',
   lenderName: '',
   lenderMobile: '',
@@ -15,6 +54,7 @@ export const emptyLoan = () => ({
 });
 
 export const toLoanValues = (l) => ({
+  direction: sideOf(l),
   account: l.account?._id || l.account || '',
   lenderName: l.lenderName || '',
   lenderMobile: l.lenderMobile || '',
@@ -24,8 +64,9 @@ export const toLoanValues = (l) => ({
 });
 
 /**
- * Cash an account holder puts into the shop. Pick the account it came from and
- * type the amount - that is the whole form. A name that is not on the list
+ * A loan either way: cash an account holder puts into the shop (payable) or
+ * cash the shop lends them (receivable). Pick the side, the account and the
+ * amount - that is the whole form. A name that is not on the list
  * yet opens a new loan account when the loan is saved. Loan accounts are their
  * own list; swipe customers never appear here.
  */
@@ -75,6 +116,7 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
         account: form.account || null,
         lenderName: form.lenderName.trim(),
         lenderMobile: form.lenderMobile.trim(),
+        direction: form.direction,
         principal: Number(form.principal),
         entryDate: new Date(form.entryDate).toISOString(),
         notes: form.notes,
@@ -87,10 +129,26 @@ export function LoanForm({ initial, submitLabel, busyLabel, onSubmit, onCancel }
 
   if (!accounts) return <Skeleton className="h-[220px]" />;
 
+  const side = LOAN_SIDES[form.direction] || LOAN_SIDES.payable;
+
   return (
     <form onSubmit={submit} className="space-y-5 rise">
       <section>
-        <SectionTitle>Who gave the cash</SectionTitle>
+        <SectionTitle>Loan type</SectionTitle>
+        <Segmented
+          value={form.direction}
+          onChange={(direction) => setForm((f) => ({ ...f, direction }))}
+          options={SIDE_OPTIONS}
+        />
+        <p className="mt-2 text-[12px] muted-2">
+          {form.direction === 'receivable'
+            ? 'The shop lends cash out. It leaves the drawer now and comes back as it is collected.'
+            : 'An account lends the shop cash. It comes into the drawer now and goes back as it is repaid.'}
+        </p>
+      </section>
+
+      <section>
+        <SectionTitle>{side.who}</SectionTitle>
         <Card className="space-y-3.5">
           <Field label="Account name">
             <select className="field" value={adding ? '__new' : form.account} onChange={pick}>

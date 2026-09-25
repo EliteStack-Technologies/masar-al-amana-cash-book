@@ -6,6 +6,11 @@ const loanSchema = new mongoose.Schema(
     shopOwner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     loanNumber: { type: String, unique: true, index: true },
 
+    // payable: the account lent the shop cash (in), the shop pays it back.
+    // receivable: the shop lent the account cash (out), they pay it back.
+    // Loans from before this field existed have none and read as payable.
+    direction: { type: String, enum: ['payable', 'receivable'], default: 'payable', index: true },
+
     // Who put the cash in, from the loan accounts list; the name is
     // snapshotted so renaming an account never rewrites loan history.
     account: { type: mongoose.Schema.Types.ObjectId, ref: 'LoanAccount', default: null, index: true },
@@ -48,5 +53,11 @@ loanSchema.pre('validate', async function (next) {
     next(err);
   }
 });
+
+export const DIRECTIONS = ['payable', 'receivable'];
+
+/** Match for one direction; older rows without the field count as payable. */
+export const directionMatch = (direction) =>
+  direction === 'receivable' ? { direction: 'receivable' } : { direction: { $ne: 'receivable' } };
 
 export default mongoose.model('Loan', loanSchema);

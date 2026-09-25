@@ -14,6 +14,7 @@ import * as capital from '../controllers/capitalController.js';
 import * as settlement from '../controllers/settlementController.js';
 import * as cashbook from '../controllers/cashbookController.js';
 import * as opening from '../controllers/openingBalanceController.js';
+import * as pl from '../controllers/plController.js';
 
 const router = Router();
 
@@ -96,6 +97,11 @@ router.patch('/capital/:id', capital.updateCapital);
 router.delete('/capital/:id', capital.deleteCapital);
 router.post('/capital/:id/withdrawals', capital.addWithdrawal);
 router.delete('/capital/:id/withdrawals/:withdrawalId', capital.deleteWithdrawal);
+
+// --- profit & loss + profit shared out to partners ---
+router.get('/pl', pl.plReport);
+router.post('/pl/settlements', pl.createProfitSettlement);
+router.delete('/pl/settlements/:id', pl.deleteProfitSettlement);
 
 // --- day-level settlement ---
 router.get('/settlements/day', settlement.listSettlements);

@@ -5,7 +5,7 @@ import { AppShell } from '@/components/AppShell';
 import { useAuth } from '@/components/AuthProvider';
 import {
   IconUsers, IconMachine, IconArrowUp, IconArrowDown, IconHand, IconList,
-  IconClock, IconTag, IconUser, IconChevron, IconLogout, IconWallet, IconCash,
+  IconClock, IconTag, IconUser, IconChevron, IconLogout, IconWallet, IconCash, IconChart,
 } from '@/components/Icons';
 
 const GROUPS = [
@@ -18,7 +18,8 @@ const GROUPS = [
       { href: '/expenses', icon: IconArrowDown, title: 'Expenses', detail: 'Rent, salary, bills and more' },
       { href: '/transactions', icon: IconList, title: 'All swipes', detail: 'Every card entry in the book' },
       { href: '/capital', icon: IconWallet, title: 'Capital', detail: 'Money put in by owners or partners, and withdrawals' },
-      { href: '/loans', icon: IconHand, title: 'Loans', detail: 'Cash put in by loan accounts, and repayments' },
+      { href: '/loans', icon: IconHand, title: 'Loans', detail: 'Payable and receivable loans, with repayments and collections' },
+      { href: '/pl', icon: IconChart, title: 'Profit & loss', detail: 'Net profit by month, and profit settled to partners' },
       { href: '/settlements', icon: IconClock, title: 'Vendor settlement', detail: 'Machine-wise settlement and ledger with the card company' },
     ],
   },

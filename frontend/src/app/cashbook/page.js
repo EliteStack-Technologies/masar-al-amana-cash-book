@@ -19,6 +19,9 @@ const KINDS = {
   'settle-diff': { label: 'Settle diff', tone: 'text-sun-600' },
   loan: { label: 'Loan in', tone: 'text-leaf-500 dark:text-leaf-400' },
   repayment: { label: 'Repaid', tone: 'text-stamp-500 dark:text-stamp-400' },
+  lend: { label: 'Loan out', tone: 'text-stamp-500 dark:text-stamp-400' },
+  collection: { label: 'Collected', tone: 'text-leaf-500 dark:text-leaf-400' },
+  'profit-out': { label: 'Profit out', tone: 'text-stamp-500 dark:text-stamp-400' },
   capital: { label: 'Capital in', tone: 'text-leaf-500 dark:text-leaf-400' },
   withdrawal: { label: 'Capital out', tone: 'text-stamp-500 dark:text-stamp-400' },
   income: { label: 'Income', tone: 'text-leaf-500 dark:text-leaf-400' },
@@ -56,9 +59,9 @@ export default function CashbookPage() {
     : data.ledger.filter((r) => {
         if (!kind) return true;
         if (kind === 'swipe') return r.kind === 'swipe' || r.kind === 'settlement' || r.kind === 'settle-diff';
-        if (kind === 'loan') return r.kind === 'loan' || r.kind === 'repayment';
+        if (kind === 'loan') return ['loan', 'repayment', 'lend', 'collection'].includes(r.kind);
         if (kind === 'capital') return r.kind === 'capital' || r.kind === 'withdrawal';
-        return r.kind === 'income' || r.kind === 'expense' || r.kind === 'opening';
+        return ['income', 'expense', 'opening', 'profit-out'].includes(r.kind);
       });
   // Back to page 1 when the window or the filter changes.
   const paged = usePaged(shown, PAGE_SIZE, [from, to, kind]);
