@@ -8,7 +8,8 @@
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
     "seed": "node src/seed.js",
-    "recalc": "node src/recalc.js"
+    "recalc": "node src/recalc.js",
+    "wipe": "node src/wipe.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
