@@ -14,6 +14,7 @@ import {
   IconSearch, IconFilter, IconList, IconDownload,
 } from '@/components/Icons';
 
+import { Amt } from '@/components/Amount';
 const STATUS_OPTIONS = [
   { value: '', label: 'All' },
   { value: 'pending', label: 'Owed' },
@@ -261,7 +262,7 @@ function TotalsBar({ totals }) {
       {cells.map(([label, value, tone], i) => (
         <div key={label} className={cx('px-2.5 py-2.5', i < 2 && 'border-r border-[var(--rule)]')}>
           <p className="colhead">{label}</p>
-          <p className={cx('sum mt-1 text-[13.5px]', tone)}>{money(value || 0)}</p>
+          <p className={cx('sum mt-1 text-[13.5px]', tone)}><Amt value={value || 0} /></p>
         </div>
       ))}
     </div>

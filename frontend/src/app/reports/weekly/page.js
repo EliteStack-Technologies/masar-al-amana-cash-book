@@ -11,6 +11,7 @@ import { PeriodPicker, PeriodTabs, ReportBreakdown, ReportHeadline } from '@/com
 import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconChart, IconChevron } from '@/components/Icons';
 
+import { Amt } from '@/components/Amount';
 export default function WeeklyReportPage() {
   return (
     <Suspense fallback={<AppShell title="One week" back><Skeleton className="h-[180px]" /></AppShell>}>
@@ -98,7 +99,7 @@ function DayRow({ day, peak }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="sum text-[14px]">{money(day.swipedAmount)}</span>
+          <span className="sum text-[14px]"><Amt value={day.swipedAmount} /></span>
           <span className="sum text-[12px] !font-semibold text-leaf-600">+{moneyShort(day.margin)}</span>
         </div>
         <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--paper-2)]">

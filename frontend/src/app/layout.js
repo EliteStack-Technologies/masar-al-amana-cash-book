@@ -1,6 +1,7 @@
 import { Archivo, IBM_Plex_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
+import { AmountsProvider } from '@/components/Amount';
 
 // One variable family carries display and body; the `wdth` axis is what makes
 // the expanded ledger voice possible without a second download.
@@ -36,7 +37,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" data-theme="light" className={`${archivo.variable} ${plexMono.variable}`}>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <AmountsProvider>{children}</AmountsProvider>
+        </AuthProvider>
       </body>
     </html>
   );

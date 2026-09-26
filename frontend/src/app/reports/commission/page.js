@@ -9,6 +9,7 @@ import { PeriodPicker } from '@/components/ReportBits';
 import { DownloadMenu, REPORT_COPIES } from '@/components/DownloadMenu';
 import { IconPercent } from '@/components/Icons';
 
+import { Amt } from '@/components/Amount';
 export default function CommissionReportPage() {
   const [month, setMonth] = useState(thisMonthInput());
   const [data, setData] = useState(null);
@@ -57,7 +58,7 @@ export default function CommissionReportPage() {
             <Card className="p-4">
               <Figure
                 label="Charged to customers this month"
-                value={money(s.chargeToCustomer)}
+                amount={s.chargeToCustomer}
                 size="lg"
               />
               <div className="mt-3.5 border-t border-[var(--rule)] pt-3.5">
@@ -122,11 +123,11 @@ function RateRow({ row }) {
         {row.custPercent}%
       </span>
       <div className="min-w-0 flex-1">
-        <p className="sum text-[15px]">{money(row.chargeToCustomer)}</p>
+        <p className="sum text-[15px]"><Amt value={row.chargeToCustomer} /></p>
         <p className="mt-0.5 text-[11.5px] muted-2">
           {row.count} {row.count === 1 ? 'swipe' : 'swipes'} · margin{' '}
           <span className="sum !font-semibold text-leaf-500 dark:text-leaf-400">
-            {money(row.margin)}
+            <Amt value={row.margin} />
           </span>
         </p>
       </div>

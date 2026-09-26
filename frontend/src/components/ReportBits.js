@@ -34,10 +34,10 @@ export function ReportHeadline({ summary }) {
     <Card className="p-0">
       <div className="grid grid-cols-2">
         <div className="border-r border-[var(--rule)] p-3.5">
-          <Figure label="Cash out" value={money(summary.givenAmount)} size="lg" />
+          <Figure label="Cash out" amount={summary.givenAmount} size="lg" />
         </div>
         <div className="p-3.5">
-          <Figure label="Swiped" value={money(summary.swipedAmount)} size="lg" />
+          <Figure label="Swiped" amount={summary.swipedAmount} size="lg" />
         </div>
       </div>
       <div className="border-t border-[var(--rule)] p-3.5">

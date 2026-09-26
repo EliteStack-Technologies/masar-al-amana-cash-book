@@ -6,7 +6,9 @@ import { money, dateOnly, dateTime, todayInput, toLocalInput, round2, balanceTex
 import { Button, Card, ErrorNote, Field, Figure, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
 import { IconCheck, IconClock } from '@/components/Icons';
 import { Pager, usePaged } from '@/components/Pager';
+import { inDateRange } from '@/components/DateRangeFilter';
 
+import { Amt } from '@/components/Amount';
 /** Green when the card company has paid extra, red when it has paid short. */
 const balanceTone = (b) =>
   b > 0 ? 'text-leaf-500 dark:text-leaf-400' : b < 0 ? 'text-stamp-500 dark:text-stamp-400' : 'muted-2';
@@ -40,13 +42,20 @@ export function useVendorLedger(machineId) {
  *
  * `collapsible` keeps the form and ledger behind buttons, for pages where
  * settling is one thing among others (the machine report).
+ *
+ * `range` ({ from, to } days) narrows the ledger to settlements received in
+ * those dates; balances stay the running totals.
  */
-export function VendorSettlement({ machineId, ledger, onChange, collapsible = false }) {
+export function VendorSettlement({ machineId, ledger, onChange, collapsible = false, range }) {
   const { data, error, reload } = ledger;
   const [formOpen, setFormOpen] = useState(!collapsible);
   const [ledgerOpen, setLedgerOpen] = useState(!collapsible);
   const [actionError, setActionError] = useState('');
-  const ledgerPage = usePaged(data?.ledger, 10);
+  const from = range?.from || '';
+  const to = range?.to || '';
+  const filtered = Boolean(from || to);
+  const ledgerRows = data?.ledger.filter((b) => inDateRange(b.receivedAt, from, to));
+  const ledgerPage = usePaged(ledgerRows, 10, [from, to]);
 
   const changed = async () => {
     await reload();
@@ -78,7 +87,7 @@ export function VendorSettlement({ machineId, ledger, onChange, collapsible = fa
             <div className="border-r border-[var(--rule)] p-3.5">
               <Figure
                 label="Due on pending"
-                value={money(data.pendingAmount)}
+                amount={data.pendingAmount}
                 tone="stamp"
                 size="lg"
                 sub={`${data.pending.length} ${data.pending.length === 1 ? 'entry' : 'entries'}`}
@@ -134,8 +143,12 @@ export function VendorSettlement({ machineId, ledger, onChange, collapsible = fa
 
       {ledgerOpen && (
         <section>
-          <SectionTitle>Ledger</SectionTitle>
-          {data.ledger.length ? (
+          <SectionTitle>
+            {filtered
+              ? `Ledger · ${ledgerRows.length} received in these dates · ${money(ledgerRows.reduce((a, b) => a + b.receivedAmount, 0))}`
+              : 'Ledger'}
+          </SectionTitle>
+          {ledgerRows.length ? (
             <div className="space-y-3">
               <Card className="ruled py-0">
                 {ledgerPage.pageItems.map((b) => (
@@ -151,7 +164,9 @@ export function VendorSettlement({ machineId, ledger, onChange, collapsible = fa
               />
             </div>
           ) : (
-            <p className="text-[13px] muted">No settlements recorded for this machine yet.</p>
+            <p className="text-[13px] muted">
+              {filtered ? 'No settlements received in these dates.' : 'No settlements recorded for this machine yet.'}
+            </p>
           )}
         </section>
       )}
@@ -277,7 +292,7 @@ function LedgerLine({ b, onRevert }) {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="sum text-[15px]">
-            {money(b.receivedAmount)} <span className="text-[11px] !font-normal muted-2">paid</span>
+            <Amt value={b.receivedAmount} /> <span className="text-[11px] !font-normal muted-2">paid</span>
           </p>
           <p className="ref mt-0.5 text-[10.5px] muted-2">
             {dateTime(b.receivedAt)} · {b.txnCount} {b.txnCount === 1 ? 'entry' : 'entries'} up to {dateOnly(`${b.settleDate}T12:00:00`)}
@@ -291,7 +306,7 @@ function LedgerLine({ b, onRevert }) {
       <div className="mt-2 grid grid-cols-3 gap-2 text-[11.5px]">
         <div>
           <p className="colhead">Due</p>
-          <p className="sum mt-0.5">{money(b.expectedAmount)}</p>
+          <p className="sum mt-0.5"><Amt value={b.expectedAmount} /></p>
         </div>
         <div>
           <p className="colhead">Difference</p>

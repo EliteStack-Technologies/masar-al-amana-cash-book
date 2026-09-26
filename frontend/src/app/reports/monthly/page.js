@@ -11,6 +11,7 @@ import { PeriodPicker, PeriodTabs, ReportBreakdown, ReportHeadline } from '@/com
 import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconChart, IconChevron } from '@/components/Icons';
 
+import { Amt } from '@/components/Amount';
 export default function MonthlyReportPage() {
   // useSearchParams needs a Suspense boundary above it during prerender.
   return (
@@ -129,7 +130,7 @@ function DayRow({ day, peak }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="sum text-[14px]">{money(day.swipedAmount)}</span>
+          <span className="sum text-[14px]"><Amt value={day.swipedAmount} /></span>
           <span className="sum text-[12px] !font-semibold text-leaf-500 dark:text-leaf-400">
             +{moneyShort(day.margin)}
           </span>

@@ -12,6 +12,7 @@ import {
 } from '@/components/ui';
 import { IconCheck, IconClock, IconEdit, IconTrash } from '@/components/Icons';
 
+import { Amt } from '@/components/Amount';
 export default function TransactionDetailPage({ params }) {
   // useSearchParams needs a Suspense boundary above it during prerender.
   return (
@@ -126,7 +127,7 @@ function TransactionDetail({ params }) {
         <Card className="p-4">
           <div className="flex items-baseline justify-between gap-3 pb-3">
             <span className="colhead">Card was swiped for</span>
-            <span className="sum text-[28px] leading-none">{money(txn.swipedAmount)}</span>
+            <span className="sum text-[28px] leading-none"><Amt value={txn.swipedAmount} /></span>
           </div>
           <div className="border-t border-[var(--rule)] pt-3">
             <SplitRail
@@ -146,7 +147,7 @@ function TransactionDetail({ params }) {
             <div className="flex items-baseline justify-between gap-3">
               <StatusPill status={txn.settlementStatus} />
               <span className="sum text-[18px]">
-                {money(received ? txn.settlementAmount : txn.supplierAccount)}
+                <Amt value={received ? txn.settlementAmount : txn.supplierAccount} />
               </span>
             </div>
             <p className="mt-2 text-[12.5px] muted">
@@ -154,13 +155,13 @@ function TransactionDetail({ params }) {
                 ? `Came in on ${dateTime(txn.receivedAt)}.`
                 : 'Still to come in from the card company.'}{' '}
               <span className="muted-2">
-                Expected {money(txn.supplierAccount)} = the swipe less the {txn.supplierPercent}% fee.
+                Expected <Amt value={txn.supplierAccount} /> = the swipe less the {txn.supplierPercent}% fee.
               </span>
             </p>
             {received ? (
               <p className="mt-1 text-[12.5px]">
-                Profit <span className="sum text-leaf-600 dark:text-leaf-400">{money(txn.profit)}</span>
-                <span className="muted-2"> = settlement less the {money(txn.givenAmount)} cash</span>
+                Profit <span className="sum text-leaf-600 dark:text-leaf-400"><Amt value={txn.profit} /></span>
+                <span className="muted-2"> = settlement less the <Amt value={txn.givenAmount} /> cash</span>
               </p>
             ) : null}
             {received && txn.settlementNote ? (
@@ -201,7 +202,7 @@ function TransactionDetail({ params }) {
                 </Field>
                 <p className="text-[11.5px] muted-2">
                   Profit will be{' '}
-                  {money((paid === '' ? txn.supplierAccount : Number(paid)) - txn.givenAmount)}.
+                  <Amt value={(paid === '' ? txn.supplierAccount : Number(paid)) - txn.givenAmount} />.
                 </p>
                 <div className="flex gap-2">
                   <Button type="button" variant="soft" className="flex-1" onClick={() => setSettling(false)}>

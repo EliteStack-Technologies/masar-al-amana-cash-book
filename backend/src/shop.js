@@ -4,6 +4,7 @@ import CapitalAccount from './models/CapitalAccount.js';
 import CapitalWithdrawal from './models/CapitalWithdrawal.js';
 import CardMachine from './models/CardMachine.js';
 import Category from './models/Category.js';
+import Counter from './models/Counter.js';
 import Customer from './models/Customer.js';
 import Expense from './models/Expense.js';
 import Income from './models/Income.js';
@@ -13,6 +14,7 @@ import LoanSettlement from './models/LoanSettlement.js';
 import OpeningBalance from './models/OpeningBalance.js';
 import Settlement from './models/Settlement.js';
 import Transaction from './models/Transaction.js';
+import User from './models/User.js';
 
 /**
  * The one shop both owner logins work in. Every record's `shopOwner` is this
@@ -25,6 +27,22 @@ const MODELS = [
   Capital, CapitalAccount, CapitalWithdrawal, CardMachine, Customer, Expense, Income, Loan, LoanAccount,
   LoanSettlement, OpeningBalance, Settlement, Transaction,
 ];
+
+/**
+ * The charge-to-customer % used to default to 2.9 on logins and customers,
+ * and neither screen lets it be changed any more. Once, set every 2.9 still
+ * sitting there to the new default of 0; a marker in the counters collection
+ * keeps it from running again, so a rate set later is never touched.
+ */
+export async function zeroOldDefaultRates({ log = console.log } = {}) {
+  const MARK = 'migration:zero-default-rate';
+  if (await Counter.exists({ _id: MARK })) return;
+
+  const users = await User.updateMany({ defaultCommissionPercent: 2.9 }, { $set: { defaultCommissionPercent: 0 } });
+  const customers = await Customer.updateMany({ commissionPercent: 2.9 }, { $set: { commissionPercent: 0 } });
+  await Counter.create({ _id: MARK, seq: 1 });
+  log(`[shop] default charge % 2.9 -> 0 on ${users.modifiedCount} login(s), ${customers.modifiedCount} customer(s)`);
+}
 
 /**
  * Moves records still keyed to an individual login onto the shop. Runs on

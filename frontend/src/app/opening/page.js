@@ -8,6 +8,7 @@ import { Button, Card, Empty, ErrorNote, Field, Figure, Skeleton } from '@/compo
 import { IconWallet, IconChevron, IconPlus } from '@/components/Icons';
 import { Pager, usePaged } from '@/components/Pager';
 
+import { Amt } from '@/components/Amount';
 /**
  * Opening balances: cash already in the drawer when the book starts (or is
  * topped up to a counted figure). Each one is a cash-in line in the cash book
@@ -57,7 +58,7 @@ export default function OpeningBalancePage() {
       <div className="space-y-4">
         {items && (
           <Card className="p-3.5 rise">
-            <Figure label="Total opening balance" value={money(total)} tone="leaf" size="lg" />
+            <Figure label="Total opening balance" amount={total} tone="leaf" size="lg" />
           </Card>
         )}
 
@@ -97,7 +98,7 @@ export default function OpeningBalancePage() {
                       {dateOnly(o.entryDate)} {timeOnly(o.entryDate)}
                     </p>
                   </div>
-                  <p className="sum shrink-0 text-[15px] text-leaf-500 dark:text-leaf-400">+{money(o.amount)}</p>
+                  <p className="sum shrink-0 text-[15px] text-leaf-500 dark:text-leaf-400">+<Amt value={o.amount} /></p>
                   <span className="muted-2"><IconChevron size={15} /></span>
                 </button>
               ))}

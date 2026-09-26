@@ -9,6 +9,7 @@ import { Button, Card, Empty, ErrorNote, Figure, SectionTitle, Segmented, Skelet
 import { IconWallet, IconChevron, IconPlus } from '@/components/Icons';
 import { Pager, usePageFor } from '@/components/Pager';
 
+import { Amt } from '@/components/Amount';
 const STATUS = [
   { value: '', label: 'All' },
   { value: 'open', label: 'Open' },
@@ -57,8 +58,8 @@ export default function CapitalPage() {
         {data && (
           <Card className="p-0 rise">
             <div className="grid grid-cols-2">
-              <div className="border-r border-[var(--rule)] p-3.5"><Figure label="Total put in" value={money(data.totals.invested)} /></div>
-              <div className="p-3.5"><Figure label="In the shop" value={money(data.totals.balance)} tone="leaf" /></div>
+              <div className="border-r border-[var(--rule)] p-3.5"><Figure label="Total put in" amount={data.totals.invested} /></div>
+              <div className="p-3.5"><Figure label="In the shop" amount={data.totals.balance} tone="leaf" /></div>
             </div>
           </Card>
         )}
@@ -97,8 +98,8 @@ export default function CapitalPage() {
                     <p className="ref mt-0.5 text-[10.5px] muted-2">{c.capitalNumber} · {dateOnly(c.entryDate)}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="sum text-[15px]">{money(c.amount)}</p>
-                    <p className="sum text-[11px] !font-semibold text-leaf-500 dark:text-leaf-400">{money(c.balance)} in</p>
+                    <p className="sum text-[15px]"><Amt value={c.amount} /></p>
+                    <p className="sum text-[11px] !font-semibold text-leaf-500 dark:text-leaf-400"><Amt value={c.balance} /> in</p>
                   </div>
                   <span className="muted-2"><IconChevron size={15} /></span>
                 </Link>
@@ -124,18 +125,18 @@ function AccountRow({ c }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2">
           <p className="truncate text-[14px] font-semibold">{c.name}</p>
-          <p className="sum shrink-0 text-[15px] text-leaf-500 dark:text-leaf-400">{money(c.balance)}</p>
+          <p className="sum shrink-0 text-[15px] text-leaf-500 dark:text-leaf-400"><Amt value={c.balance} /></p>
         </div>
         <div className="mt-0.5 flex items-baseline justify-between gap-2">
           <p className="ref text-[10.5px] muted-2">
             {c.entries} {c.entries === 1 ? 'entry' : 'entries'} · last {dateOnly(c.lastAt)}
           </p>
           <p className="colhead">
-            in <span className="sum text-[11px] !font-semibold">{money(c.invested)}</span>
+            in <span className="sum text-[11px] !font-semibold"><Amt value={c.invested} /></span>
             {' · '}
             out{' '}
             <span className="sum text-[11px] !font-semibold text-stamp-500 dark:text-stamp-400">
-              {money(c.withdrawn)}
+              <Amt value={c.withdrawn} />
             </span>
           </p>
         </div>

@@ -10,6 +10,7 @@ import { IconArrowUp, IconSearch, IconChevron, IconPlus } from '@/components/Ico
 import { DownloadMenu } from '@/components/DownloadMenu';
 import { Pager, usePageFor } from '@/components/Pager';
 
+import { Amt } from '@/components/Amount';
 export default function IncomePage() {
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -52,7 +53,7 @@ export default function IncomePage() {
           <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[60px]" />)}</div>
         ) : data && data.items.length ? (
           <div className="space-y-4 rise">
-            <Card className="p-3.5"><Figure label="Total income (filtered)" value={money(data.totals.amount)} tone="leaf" size="lg" /></Card>
+            <Card className="p-3.5"><Figure label="Total income (filtered)" amount={data.totals.amount} tone="leaf" size="lg" /></Card>
 
             <Link href="/income/new" className="block">
               <Button type="button" variant="stamp" className="w-full">
@@ -67,7 +68,7 @@ export default function IncomePage() {
                     <p className="truncate text-[14px] font-semibold">{it.category || 'Uncategorised'}</p>
                     <p className="ref mt-0.5 text-[10.5px] muted-2">{dateOnly(it.entryDate)}{it.receiver ? ` · ${it.receiver}` : ''}</p>
                   </div>
-                  <p className="sum shrink-0 text-[15px] text-leaf-500 dark:text-leaf-400">+{money(it.amount)}</p>
+                  <p className="sum shrink-0 text-[15px] text-leaf-500 dark:text-leaf-400">+<Amt value={it.amount} /></p>
                   <span className="muted-2"><IconChevron size={15} /></span>
                 </Link>
               ))}

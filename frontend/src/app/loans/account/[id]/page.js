@@ -13,6 +13,7 @@ import { IconHand, IconChevron } from '@/components/Icons';
 import { DownloadMenu } from '@/components/DownloadMenu';
 import { LOAN_SIDES } from '@/components/LoanForm';
 
+import { Amt } from '@/components/Amount';
 /**
  * One account's loan history on one side of the book: the combined position
  * at the top, then every loan with its own repayments or collections
@@ -74,10 +75,10 @@ function AccountLoans() {
           <Card className="p-0">
             <div className="grid grid-cols-2">
               <div className="border-r border-[var(--rule)] p-3.5">
-                <Figure label={side.amount} value={money(t.taken)} size="lg" />
+                <Figure label={side.amount} amount={t.taken} size="lg" />
               </div>
               <div className="p-3.5">
-                <Figure label={side.outstanding} value={money(t.outstanding)} tone={owedTone} size="lg" />
+                <Figure label={side.outstanding} amount={t.outstanding} tone={owedTone} size="lg" />
               </div>
             </div>
             <div className="border-t border-[var(--rule)] p-3.5">
@@ -119,7 +120,7 @@ function AccountLoans() {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <p className="sum text-[15px]">{money(l.principal)}</p>
+                          <p className="sum text-[15px]"><Amt value={l.principal} /></p>
                           {l.status === 'closed' && (
                             <span className="stamp-mark text-leaf-500 dark:text-leaf-400">Closed</span>
                           )}
@@ -131,10 +132,10 @@ function AccountLoans() {
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="sum text-[13px] text-leaf-500 dark:text-leaf-400">
-                          {money(l.settledAmount)} {side.settledShort}
+                          <Amt value={l.settledAmount} /> {side.settledShort}
                         </p>
                         <p className={`sum text-[13px] ${direction === 'receivable' ? 'text-leaf-500 dark:text-leaf-400' : 'text-stamp-500 dark:text-stamp-400'}`}>
-                          {money(l.outstanding)} left
+                          <Amt value={l.outstanding} /> left
                         </p>
                       </div>
                       <span className="muted-2"><IconChevron size={15} /></span>
@@ -152,7 +153,7 @@ function AccountLoans() {
                               {dateOnly(s.entryDate)}{s.notes ? ` · ${s.notes}` : ''}
                             </p>
                             <p className="sum shrink-0 text-[12px] text-leaf-500 dark:text-leaf-400">
-                              {money(s.amount)}
+                              <Amt value={s.amount} />
                             </p>
                           </div>
                         ))}

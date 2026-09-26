@@ -11,6 +11,7 @@ import { IconHand, IconChevron, IconPlus, IconDownload } from '@/components/Icon
 import { Pager, usePageFor } from '@/components/Pager';
 import { LOAN_SIDES, SIDE_OPTIONS } from '@/components/LoanForm';
 
+import { Amt } from '@/components/Amount';
 const STATUS = [
   { value: '', label: 'All' },
   { value: 'open', label: 'Open' },
@@ -94,7 +95,8 @@ function Loans() {
                   <p className={cx('colhead mb-1.5', open && '!text-[var(--text)]')}>{s.label}</p>
                   <Figure
                     label={s.outstanding}
-                    value={pos ? money(pos.outstanding) : '…'}
+                    amount={pos ? pos.outstanding : undefined}
+                    value="…"
                     tone={toneOf(value)}
                     sub={pos ? `${s.amount.toLowerCase()} ${money(pos.taken)}` : undefined}
                   />
@@ -130,8 +132,8 @@ function Loans() {
                     <p className="ref mt-0.5 text-[10.5px] muted-2">{l.loanNumber} · {dateOnly(l.entryDate)}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="sum text-[15px]">{money(l.principal)}</p>
-                    <p className={cx('sum text-[11px] !font-semibold', textTone(direction))}>{money(l.outstanding)} left</p>
+                    <p className="sum text-[15px]"><Amt value={l.principal} /></p>
+                    <p className={cx('sum text-[11px] !font-semibold', textTone(direction))}><Amt value={l.outstanding} /> left</p>
                   </div>
                   <span className="muted-2"><IconChevron size={15} /></span>
                 </Link>

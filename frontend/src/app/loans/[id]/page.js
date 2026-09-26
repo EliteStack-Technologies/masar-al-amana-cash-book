@@ -12,6 +12,7 @@ import {
 import { IconEdit, IconTrash } from '@/components/Icons';
 import { LOAN_SIDES, sideOf } from '@/components/LoanForm';
 
+import { Amt } from '@/components/Amount';
 export default function LoanDetailPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -93,7 +94,7 @@ export default function LoanDetailPage() {
           <Card className="p-4">
             <div className="flex items-baseline justify-between gap-3 pb-3">
               <span className="colhead">{side.outstanding}</span>
-              <span className={`sum text-[28px] leading-none ${owedTone}`}>{money(loan.outstanding)}</span>
+              <span className={`sum text-[28px] leading-none ${owedTone}`}><Amt value={loan.outstanding} /></span>
             </div>
             <div className="border-t border-[var(--rule)] pt-3">
               <SplitRail
@@ -136,7 +137,7 @@ export default function LoanDetailPage() {
                 {settlements.map((s) => (
                   <div key={s._id} className="flex items-center gap-3 py-2.5">
                     <div className="min-w-0 flex-1">
-                      <p className="sum text-[14px] text-leaf-500 dark:text-leaf-400">{money(s.amount)}</p>
+                      <p className="sum text-[14px] text-leaf-500 dark:text-leaf-400"><Amt value={s.amount} /></p>
                       <p className="ref mt-0.5 text-[10.5px] muted-2">{dateTime(s.entryDate)}{s.notes ? ` · ${s.notes}` : ''}</p>
                     </div>
                     <button type="button" onClick={() => removeSettlement(s._id)} aria-label={`Remove ${side.settle}`} className="muted-2 active:text-stamp-500">
