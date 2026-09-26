@@ -4,17 +4,18 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/AppShell';
 import { api, qs } from '@/lib/api';
-import { money, dateOnly, timeOnly, todayInput } from '@/lib/format';
+import { dateOnly, timeOnly, todayInput } from '@/lib/format';
 import { Card, Empty, ErrorNote, Field, Figure, Segmented, Skeleton, cx } from '@/components/ui';
 import { IconList } from '@/components/Icons';
 import { Pager, usePaged } from '@/components/Pager';
 
+import { Amt } from '@/components/Amount';
 const PAGE_SIZE = 30;
 
 /** How each kind of line reads in the book. */
 const KINDS = {
   opening: { label: 'Opening', tone: 'text-leaf-500 dark:text-leaf-400' },
-  swipe: { label: 'Swipe', tone: 'text-ink-500 dark:text-ink-300' },
+  swipe: { label: '', tone: 'text-ink-500 dark:text-ink-300' },
   settlement: { label: 'Settlement', tone: 'text-leaf-500 dark:text-leaf-400' },
   'settle-diff': { label: 'Settle diff', tone: 'text-sun-600' },
   loan: { label: 'Loan in', tone: 'text-leaf-500 dark:text-leaf-400' },
@@ -76,18 +77,18 @@ export default function CashbookPage() {
           <Card className="p-0 rise">
             <div className="grid grid-cols-3">
               <div className="border-r border-[var(--rule)] p-3.5">
-                <Figure label="Opening" value={money(data.opening)} />
+                <Figure label="Opening" amount={data.opening} fit={82} />
               </div>
               <div className="border-r border-[var(--rule)] p-3.5">
-                <Figure label="In" value={money(data.totalIn)} tone="leaf" />
+                <Figure label="In" amount={data.totalIn} tone="leaf" fit={82} />
               </div>
               <div className="p-3.5">
-                <Figure label="Out" value={money(data.totalOut)} tone="stamp" />
+                <Figure label="Out" amount={data.totalOut} tone="stamp" fit={82} />
               </div>
             </div>
             <div className="flex items-baseline justify-between border-t border-[var(--rule)] px-3.5 py-3">
               <span className="colhead">Closing balance</span>
-              <span className="sum text-[20px]">{money(data.closing)}</span>
+              <span className="sum text-[20px]"><Amt value={data.closing} /></span>
             </div>
           </Card>
         )}
@@ -136,10 +137,9 @@ function LedgerRow({ row }) {
   const body = (
     <div className="flex items-start gap-3 px-3.5 py-3">
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className={cx('colhead shrink-0', meta.tone)}>{meta.label}</span>
-          <p className="truncate text-[13.5px] font-semibold">{row.title}</p>
-        </div>
+        {/* The kind on its own line, the title under it with the full width. */}
+        <span className={cx('colhead block', meta.tone)}>{meta.label}</span>
+        <p className="mt-0.5 line-clamp-2 break-words text-[13.5px] font-semibold leading-snug">{row.title}</p>
         <p className="ref mt-0.5 truncate text-[10.5px] muted-2">
           {row.ref ? `${row.ref} · ` : ''}
           {dateOnly(row.date)} {timeOnly(row.date)}
@@ -154,9 +154,9 @@ function LedgerRow({ row }) {
           )}
         >
           {out ? '-' : '+'}
-          {money(row.amount)}
+          <Amt value={row.amount} />
         </p>
-        <p className="sum text-[11px] !font-semibold muted-2">{money(row.balance)}</p>
+        <p className="sum text-[11px] !font-semibold muted-2"><Amt value={row.balance} /></p>
       </div>
     </div>
   );

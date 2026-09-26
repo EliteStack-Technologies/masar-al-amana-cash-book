@@ -85,15 +85,18 @@ async function collect(ownerId, from, to) {
 
   for (const t of txns) {
     const who = t.customerName || 'Walk-in';
+    // Swipes are told apart by the machine and the supplier % the swipe was
+    // charged at (snapshotted on the swipe), not by their txn number.
+    const machineRef = `${t.machine?.name || 'Machine'} · ${+Number(t.supplierPercent || 0).toFixed(4)}%`;
     if (inWindow(t.txnDate)) {
       rows.push(line({
         date: t.txnDate,
         kind: 'swipe',
         direction: OUT,
         amount: t.givenAmount,
-        ref: t.txnNumber,
+        ref: machineRef,
         title: `Cash to ${who}`,
-        detail: `Swiped ${t.swipedAmount} on ${t.machine?.name || 'machine'} - charge ${t.chargeToCustomer}`,
+        detail: `Swiped ${t.swipedAmount} - charge ${t.chargeToCustomer}`,
         link: `/transactions/${t._id}`,
       }));
     }
@@ -103,7 +106,7 @@ async function collect(ownerId, from, to) {
         kind: 'settlement',
         direction: IN,
         amount: t.settlementAmount ?? t.supplierAccount,
-        ref: t.txnNumber,
+        ref: machineRef,
         title: `Settlement - ${t.machine?.cardCompany || t.machine?.name || 'card company'}`,
         detail: `Profit ${round2((t.settlementAmount ?? t.supplierAccount) - t.givenAmount)}`,
         link: `/transactions/${t._id}`,

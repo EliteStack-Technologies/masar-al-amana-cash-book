@@ -11,6 +11,7 @@ import { IconChart, IconTrash } from '@/components/Icons';
 import { PeriodPicker } from '@/components/ReportBits';
 import { DownloadMenu } from '@/components/DownloadMenu';
 
+import { Amt } from '@/components/Amount';
 const PERIODS = [
   { value: 'daily', label: 'Daily' },
   { value: 'weekly', label: 'Weekly' },
@@ -173,10 +174,10 @@ export default function ProfitLossPage() {
             <Card className="p-0">
               <div className="grid grid-cols-2">
                 <div className="border-r border-[var(--rule)] p-3.5">
-                  <Figure label="Unsettled profit" value={money(all.unsettled)} tone={all.unsettled < 0 ? 'stamp' : 'leaf'} size="lg" sub="all time, still to share out" />
+                  <Figure label="Unsettled profit" amount={all.unsettled} tone={all.unsettled < 0 ? 'stamp' : 'leaf'} size="lg" sub="all time, still to share out" />
                 </div>
                 <div className="p-3.5">
-                  <Figure label="Settled to partners" value={money(all.settled)} size="lg" sub={`of ${money(all.net)} net profit`} />
+                  <Figure label="Settled to partners" amount={all.settled} size="lg" sub={`of ${money(all.net)} net profit`} />
                 </div>
               </div>
               <div className="border-t border-[var(--rule)] p-3.5">
@@ -244,7 +245,7 @@ export default function ProfitLossPage() {
               </Card>
               {p.pendingCount ? (
                 <p className="mt-2 text-[11.5px] leading-snug muted-2">
-                  Not counted yet: {money(p.pendingMargin)} expected margin on {p.pendingCount} {p.pendingCount === 1 ? 'swipe' : 'swipes'} the card company has not paid.
+                  Not counted yet: <Amt value={p.pendingMargin} /> expected margin on {p.pendingCount} {p.pendingCount === 1 ? 'swipe' : 'swipes'} the card company has not paid.
                 </p>
               ) : null}
             </section>
@@ -258,7 +259,7 @@ export default function ProfitLossPage() {
                       <div className="flex items-baseline justify-between gap-3">
                         <p className="text-[13.5px] font-semibold">{dateOnly(`${d.date}T12:00:00`)}</p>
                         <p className={`sum shrink-0 text-[15px] ${d.net < 0 ? 'text-stamp-500 dark:text-stamp-400' : 'text-leaf-500 dark:text-leaf-400'}`}>
-                          {d.net < 0 ? '−' : ''}{money(Math.abs(d.net))}
+                          {d.net < 0 ? '−' : ''}<Amt value={Math.abs(d.net)} />
                         </p>
                       </div>
                       <p className="ref mt-0.5 text-[10.5px] muted-2">
@@ -307,7 +308,7 @@ export default function ProfitLossPage() {
                           {s.settlementNumber} · {dateOnly(s.entryDate)}{s.notes ? ` · ${s.notes}` : ''}
                         </p>
                       </div>
-                      <p className="sum shrink-0 text-[15px] text-stamp-500 dark:text-stamp-400">{money(s.amount)}</p>
+                      <p className="sum shrink-0 text-[15px] text-stamp-500 dark:text-stamp-400"><Amt value={s.amount} /></p>
                       <button type="button" onClick={() => remove(s)} aria-label="Remove settlement" className="muted-2 active:text-stamp-500">
                         <IconTrash size={16} />
                       </button>

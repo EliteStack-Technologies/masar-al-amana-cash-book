@@ -6,6 +6,7 @@ import { api } from '@/lib/api';
 import { money, moneyShort, preview, counterFor, toLocalInput } from '@/lib/format';
 import { Button, Card, ErrorNote, Field, Row, SectionTitle, Skeleton, cx } from '@/components/ui';
 
+import { Amt } from '@/components/Amount';
 const QUICK_AMOUNTS = [1000, 2000, 5000, 10000];
 
 /**
@@ -53,7 +54,7 @@ export const emptyTransaction = (user) => ({
   amount: '',
   counter: '',
   commissionType: 'included',
-  custPercent: String(user?.defaultCommissionPercent ?? 2.9),
+  custPercent: String(user?.defaultCommissionPercent ?? 0),
   cardRefNumber: '',
   notes: '',
   txnDate: toLocalInput(),
@@ -289,15 +290,15 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
             <div className="grid grid-cols-3 gap-2 border-t border-[var(--rule)] pt-2.5 text-[11.5px]">
               <div>
                 <p className="colhead">Supplier fee</p>
-                <p className="sum mt-0.5 text-stamp-500 dark:text-stamp-400">{money(calc.supplierFee)}</p>
+                <p className="sum mt-0.5 text-stamp-500 dark:text-stamp-400"><Amt value={calc.supplierFee} /></p>
               </div>
               <div>
                 <p className="colhead">Due from co.</p>
-                <p className="sum mt-0.5">{money(calc.supplierAccount)}</p>
+                <p className="sum mt-0.5"><Amt value={calc.supplierAccount} /></p>
               </div>
               <div className="text-right">
                 <p className="colhead">Margin</p>
-                <p className="sum mt-0.5 text-leaf-500 dark:text-leaf-400">{money(calc.margin)}</p>
+                <p className="sum mt-0.5 text-leaf-500 dark:text-leaf-400"><Amt value={calc.margin} /></p>
               </div>
             </div>
           </Card>
@@ -312,44 +313,7 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
         ) : null}
       </section>
 
-      <section>
-        <SectionTitle>
-          Customer · optional
-        </SectionTitle>
-        <Card className="space-y-3.5">
-          <Field label="Pick a saved customer" hint="Fills the name and the rate you usually charge">
-            <select className="field" value={form.customer} onChange={pickCustomer}>
-              <option value="">Walk-in — no saved customer</option>
-              {customers.map((c) => (
-                <option key={c._id} value={c._id}>
-                  {c.mobile ? `${c.name} · ${c.mobile}` : c.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Name" hint="Optional">
-              <input
-                className="field"
-                type="text"
-                placeholder="e.g. Rashid"
-                value={form.customerName}
-                onChange={(e) => setForm((f) => ({ ...f, customer: '', customerName: e.target.value }))}
-              />
-            </Field>
-            <Field label="Mobile" hint="Optional">
-              <input
-                className="field ref"
-                type="tel"
-                inputMode="numeric"
-                placeholder="05x xxx xxxx"
-                value={form.customerMobile}
-                onChange={(e) => setForm((f) => ({ ...f, customer: '', customerMobile: e.target.value }))}
-              />
-            </Field>
-          </div>
-        </Card>
-      </section>
+     
 
       <section>
         <SectionTitle>Amount</SectionTitle>
@@ -442,7 +406,44 @@ export function TransactionForm({ initial, submitLabel, busyLabel, onSubmit, onC
           </div>
         </Card>
       </section>
-
+ <section>
+        <SectionTitle>
+          Customer · optional
+        </SectionTitle>
+        <Card className="space-y-3.5">
+          <Field label="Pick a saved customer" hint="Fills the name and the rate you usually charge">
+            <select className="field" value={form.customer} onChange={pickCustomer}>
+              <option value="">Walk-in</option>
+              {customers.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.mobile ? `${c.name} · ${c.mobile}` : c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Name" hint="Optional">
+              <input
+                className="field"
+                type="text"
+                placeholder="e.g. Rashid"
+                value={form.customerName}
+                onChange={(e) => setForm((f) => ({ ...f, customer: '', customerName: e.target.value }))}
+              />
+            </Field>
+            <Field label="Mobile" hint="Optional">
+              <input
+                className="field ref"
+                type="tel"
+                inputMode="numeric"
+                placeholder="05x xxx xxxx"
+                value={form.customerMobile}
+                onChange={(e) => setForm((f) => ({ ...f, customer: '', customerMobile: e.target.value }))}
+              />
+            </Field>
+          </div>
+        </Card>
+      </section>
       <Preview calc={calc} machine={machine} custPercent={form.custPercent} />
 
       <section>
@@ -527,17 +528,30 @@ const FIGURE_TONES = {
  * A read-only AED amount the form has worked out. Set apart from the inputs
  * with a coloured border, so the result reads at a glance.
  */
+const figureFmt = new Intl.NumberFormat('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * A worked-out amount. The two sit side by side in half a phone's width, so
+ * the figure shrinks as it grows longer - 1,000.00 stays large, 2,580,000.00
+ * steps down - and the whole number is always on screen, never cut off.
+ */
 function Figured({ value, tone = 'brand' }) {
   const blank = !value;
+  const text = figureFmt.format(Number(value) || 0);
+  // About 0.6em a character in this face; fit ~115px, between 13px and 22px.
+  const size = Math.max(13, Math.min(22, Math.floor(115 / (0.6 * text.length))));
   return (
     <div
       className={cx(
-        'flex items-baseline gap-1.5 rounded-xl border-2 bg-(--paper-3) px-3 py-3 transition-colors',
+        'min-w-0 rounded-xl border-2 bg-(--paper-3) px-3 py-2.5 transition-colors',
         blank ? 'border-(--rule-strong) text-(--text-3)' : cx('text-(--text)', FIGURE_TONES[tone])
       )}
+      title={`AED ${text}`}
     >
-      <span className="sum text-[11px] opacity-70">AED</span>
-      <span className="sum truncate text-[22px] leading-none">{(Number(value) || 0).toFixed(2)}</span>
+      <span className="sum block text-[10.5px] leading-none opacity-70">AED</span>
+      <span className="sum mt-1 block break-all leading-tight" style={{ fontSize: size }}>
+        {text}
+      </span>
     </div>
   );
 }

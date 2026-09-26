@@ -430,10 +430,12 @@ async function pendingByCompany(ownerId) {
   const byCompany = new Map();
   for (const m of await withMachineNames(ownerId, raw)) {
     const name = m.cardCompany || m.machineName;
-    const row = byCompany.get(name) || { company: name, pendingAmount: 0, pendingCount: 0, machines: 0 };
+    const row = byCompany.get(name) || { company: name, pendingAmount: 0, pendingCount: 0, machines: 0, machineIds: [] };
     row.pendingAmount = round2(row.pendingAmount + m.pendingAmount);
     row.pendingCount += m.pendingCount;
     row.machines += 1;
+    // So the dashboard can open this company's settlement page.
+    row.machineIds.push(m.machineId);
     byCompany.set(name, row);
   }
   return [...byCompany.values()].sort((a, b) => b.pendingAmount - a.pendingAmount);

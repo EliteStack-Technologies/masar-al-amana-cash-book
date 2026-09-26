@@ -278,13 +278,27 @@ async function gatherReport(query, ownerId) {
     };
   }
 
+  // Pending swipes, optionally only those taken ?from= / ?to= (days included).
   if (type === 'settlement') {
-    const rows = await Transaction.find({ shopOwner: ownerId, settlementStatus: 'pending' })
-      .sort({ txnDate: 1 }).lean();
+    const isDay = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+    const from = isDay(query.from) ? query.from : null;
+    const to = isDay(query.to) ? query.to : null;
+    const match = { shopOwner: ownerId, settlementStatus: 'pending' };
+    if (from || to) {
+      match.txnDate = {};
+      if (from) match.txnDate.$gte = dayRange(from).from;
+      if (to) match.txnDate.$lt = dayRange(to).to;
+    }
+    const rows = await Transaction.find(match).sort({ txnDate: 1 }).lean();
+    const dates = from || to ? ` (${from || 'start'} to ${to || todayStr()})` : '';
     return {
-      title: 'Pending Settlements' + mark, fileBase: 'pending-settlements-' + todayStr() + tag,
+      title: 'Pending Settlements' + dates + mark,
+      fileBase: 'pending-settlements-' + (from || to ? `${from || 'start'}-to-${to || todayStr()}` : todayStr()) + tag,
       columns: txnColumns, rows: rows.map(txnRow),
-      summaryLines: txnSummaryLines(await summarise(ownerId, null)),
+      // Filtered, the totals are of the rows exported; otherwise the whole book, as before.
+      summaryLines: txnSummaryLines(
+        await summarise(ownerId, null, from || to ? { _id: { $in: rows.map((r) => r._id) } } : {})
+      ),
     };
   }
 

@@ -14,17 +14,35 @@ const vendorPendingMatch = (ownerId, machineId, upTo) => {
   return match;
 };
 
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * ?from=YYYY-MM-DD&to=YYYY-MM-DD as a match on `field`, both days included.
+ * Either end may be left off; with neither it matches everything.
+ */
+function dateWindow(query, field) {
+  const from = DAY.test(query.from || '') ? dayRange(query.from).from : null;
+  const to = DAY.test(query.to || '') ? dayRange(query.to).to : null;
+  if (!from && !to) return {};
+  return { [field]: { ...(from ? { $gte: from } : {}), ...(to ? { $lt: to } : {}) } };
+}
+
 /**
  * Every machine with what its card company still owes on pending swipes and
  * the running ledger balance: + when the company has paid extra, - when it
  * has paid short.
+ *
+ * With ?from=&to=, the pending figures cover swipes taken in those dates and
+ * the settlement count those received in them; the balance stays all time,
+ * since it is a running total.
  */
 export const listVendors = asyncHandler(async (req, res) => {
   const ownerId = req.shopId;
-  const [machines, pending, ledger] = await Promise.all([
+  const received = dateWindow(req.query, 'receivedAt');
+  const [machines, pending, ledger, inWindow] = await Promise.all([
     CardMachine.find({ shopOwner: ownerId }).sort({ name: 1 }).lean(),
     Transaction.aggregate([
-      { $match: { shopOwner: ownerId, settlementStatus: 'pending' } },
+      { $match: { shopOwner: ownerId, settlementStatus: 'pending', ...dateWindow(req.query, 'txnDate') } },
       { $group: { _id: '$machine', amount: { $sum: '$supplierAccount' }, count: { $sum: 1 } } },
     ]),
     Settlement.aggregate([
@@ -39,14 +57,23 @@ export const listVendors = asyncHandler(async (req, res) => {
         },
       },
     ]),
+    // Settlements received inside the date filter, when one is set.
+    Object.keys(received).length
+      ? Settlement.aggregate([
+          { $match: { shopOwner: ownerId, machine: { $ne: null }, ...received } },
+          { $group: { _id: '$machine', received: { $sum: '$receivedAmount' }, count: { $sum: 1 } } },
+        ])
+      : null,
   ]);
 
   const pendingBy = new Map(pending.map((p) => [String(p._id), p]));
   const ledgerBy = new Map(ledger.map((l) => [String(l._id), l]));
+  const windowBy = new Map((inWindow || ledger).map((l) => [String(l._id), l]));
 
   const items = machines.map((m) => {
     const p = pendingBy.get(String(m._id));
     const l = ledgerBy.get(String(m._id));
+    const w = windowBy.get(String(m._id));
     return {
       machineId: m._id,
       name: m.name,
@@ -55,7 +82,8 @@ export const listVendors = asyncHandler(async (req, res) => {
       pendingAmount: round2(p?.amount || 0),
       pendingCount: p?.count || 0,
       balance: round2(l?.balance || 0),
-      settlements: l?.count || 0,
+      settlements: w?.count || 0,
+      receivedAmount: round2(w?.received || 0),
       lastSettledAt: l?.lastAt || null,
     };
   });
@@ -64,6 +92,9 @@ export const listVendors = asyncHandler(async (req, res) => {
     items,
     totals: {
       pendingAmount: round2(items.reduce((a, i) => a + i.pendingAmount, 0)),
+      pendingCount: items.reduce((a, i) => a + i.pendingCount, 0),
+      receivedAmount: round2(items.reduce((a, i) => a + i.receivedAmount, 0)),
+      settlements: items.reduce((a, i) => a + i.settlements, 0),
       balance: round2(items.reduce((a, i) => a + i.balance, 0)),
     },
   });

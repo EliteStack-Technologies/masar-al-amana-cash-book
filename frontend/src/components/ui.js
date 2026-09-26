@@ -1,6 +1,7 @@
 'use client';
 
 import { money } from '@/lib/format';
+import { Amt, EyeToggle, amountText, isLarge, useAmounts } from '@/components/Amount';
 
 export const cx = (...parts) => parts.filter(Boolean).join(' ');
 
@@ -148,7 +149,7 @@ export function SplitRail({ total, segments, caption, size = 'md', animate = tru
             <div key={s.label} className="flex items-center gap-1.5">
               <span className={cx('size-2 shrink-0', RAIL_TONES[s.tone])} />
               <span className="colhead">{s.label}</span>
-              <span className={cx('sum text-[13px]', RAIL_TEXT[s.tone])}>{money(s.value)}</span>
+              <span className={cx('sum text-[13px]', RAIL_TEXT[s.tone])}><Amt value={s.value} /></span>
             </div>
           ))}
         </div>
@@ -162,19 +163,37 @@ export function SplitRail({ total, segments, caption, size = 'md', animate = tru
 /**
  * A labelled amount inside a ruled block. Replaces the tile grid — figures sit
  * in columns like a ledger, not in floating cards.
+ *
+ * Pass `amount` (a number) rather than a formatted `value` and the figure
+ * looks after itself: large amounts read short (K / L / Cr) with the eye
+ * beside the label, and the text steps down to fit `fit` px of width, so it
+ * never runs out of its column. `value` is still used as is for counts.
  */
-export function Figure({ label, value, sub, tone, size = 'md', className }) {
+export function Figure({ label, value, amount, sub, tone, size = 'md', fit = 120, className }) {
+  const { exact } = useAmounts();
+  const isAmount = amount !== undefined && amount !== null;
+  const text = isAmount ? amountText(amount, exact) : value;
+  const max = size === 'lg' ? 26 : 18;
+  // About 0.6em a character in the figure face.
+  const fitted = isAmount ? Math.max(11, Math.min(max, Math.floor(fit / (0.6 * String(text).length)))) : null;
+
   return (
     <div className={cx('min-w-0', className)}>
-      <p className="colhead">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="colhead min-w-0">{label}</p>
+        {isAmount && isLarge(amount) ? <EyeToggle size={15} /> : null}
+      </div>
       <p
         className={cx(
-          'sum mt-1 leading-none',
-          size === 'lg' ? 'text-[26px]' : 'text-[18px]',
+          'sum mt-1',
+          isAmount ? 'break-all leading-tight' : 'leading-none',
+          !isAmount && (size === 'lg' ? 'text-[26px]' : 'text-[18px]'),
           tone ? RAIL_TEXT[tone] : ''
         )}
+        style={fitted ? { fontSize: fitted } : undefined}
+        title={isAmount ? money(amount) : undefined}
       >
-        {value}
+        {text}
       </p>
       {sub && <p className="mt-1 text-[11px] leading-snug muted-2">{sub}</p>}
     </div>
@@ -199,7 +218,7 @@ export function Row({ label, value, sub, strong, tone, isMoney = true }) {
           tone ? RAIL_TEXT[tone] : ''
         )}
       >
-        {isMoney ? money(value) : value}
+        {isMoney ? <Amt value={value} /> : value}
       </span>
     </div>
   );

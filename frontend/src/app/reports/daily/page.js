@@ -12,6 +12,7 @@ import { DownloadMenu, PERIOD_COPIES } from '@/components/DownloadMenu';
 import { IconList, IconCheck, IconClock } from '@/components/Icons';
 import { Pager, usePaged } from '@/components/Pager';
 
+import { Amt } from '@/components/Amount';
 export default function DailyReportPage() {
   // useSearchParams needs a Suspense boundary above it during prerender.
   return (
@@ -171,7 +172,7 @@ function DaySettlement({ date, summary, settlements, onChange }) {
         <div className="flex items-baseline justify-between gap-3">
           <div>
             <p className="colhead">Still owed this day</p>
-            <p className="sum mt-0.5 text-[22px] text-stamp-500">{money(pendingAmount)}</p>
+            <p className="sum mt-0.5 text-[22px] text-stamp-500"><Amt value={pendingAmount} /></p>
           </div>
           <StatusPill status={pendingCount ? 'pending' : 'received'} />
         </div>
@@ -207,15 +208,15 @@ function DaySettlement({ date, summary, settlements, onChange }) {
             {settlements.map((s) => (
               <div key={s._id} className="flex items-start gap-3 border-t border-[var(--rule)] pt-3 first:border-t-0 first:pt-0">
                 <div className="min-w-0 flex-1">
-                  <p className="sum text-[15px] text-leaf-600">{money(s.receivedAmount)} <span className="muted-2 text-[11px] !font-normal">received</span></p>
+                  <p className="sum text-[15px] text-leaf-600"><Amt value={s.receivedAmount} /> <span className="muted-2 text-[11px] !font-normal">received</span></p>
                   <p className="ref mt-0.5 text-[10.5px] muted-2">
-                    {dateTime(s.receivedAt)} · {s.txnCount} {s.txnCount === 1 ? 'entry' : 'entries'} · expected {money(s.expectedAmount)}
+                    {dateTime(s.receivedAt)} · {s.txnCount} {s.txnCount === 1 ? 'entry' : 'entries'} · expected <Amt value={s.expectedAmount} />
                   </p>
                   {s.note ? <p className="mt-0.5 text-[12px] muted">{s.note}</p> : null}
                   {Math.abs(s.receivedAmount - s.expectedAmount) > 0.005 && (
                     <p className="mt-0.5 text-[11.5px] text-stamp-500">
                       {s.receivedAmount < s.expectedAmount ? 'Short by ' : 'Over by '}
-                      {money(Math.abs(s.receivedAmount - s.expectedAmount))}
+                      <Amt value={Math.abs(s.receivedAmount - s.expectedAmount)} />
                     </p>
                   )}
                 </div>

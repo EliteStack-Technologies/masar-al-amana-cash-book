@@ -5,6 +5,7 @@ import { money, dateTime } from '@/lib/format';
 import { StatusPill, SplitRail, cx } from '@/components/ui';
 import { IconCheck } from '@/components/Icons';
 
+import { Amt } from '@/components/Amount';
 /**
  * One swipe in the book. The miniature rail shows where the swipe went: the
  * cash handed over, the shop's margin and the supplier's fee.
@@ -36,7 +37,7 @@ export function TransactionCard({ txn, selectable, selected, onToggle }) {
             <p className="truncate text-[14px] font-semibold">
               {txn.customerName || txn.customerMobile}
             </p>
-            <p className="sum shrink-0 text-[16px]">{money(txn.swipedAmount)}</p>
+            <p className="sum shrink-0 text-[16px]"><Amt value={txn.swipedAmount} /></p>
           </div>
 
           <div className="mt-0.5 flex items-baseline justify-between gap-2">
@@ -58,12 +59,12 @@ export function TransactionCard({ txn, selectable, selected, onToggle }) {
             />
             <div className="mt-1.5 flex justify-between">
               <span className="colhead">
-                cash <span className="sum text-[11px] !font-semibold">{money(txn.givenAmount)}</span>
+                cash <span className="sum text-[11px] !font-semibold"><Amt value={txn.givenAmount} /></span>
               </span>
               <span className="colhead">
                 {txn.profit == null ? 'margin' : 'profit'}{' '}
                 <span className="sum text-[11px] !font-semibold text-leaf-500 dark:text-leaf-400">
-                  {money(txn.profit == null ? txn.margin : txn.profit)}
+                  <Amt value={txn.profit == null ? txn.margin : txn.profit} />
                 </span>
               </span>
             </div>

@@ -10,6 +10,7 @@ import {
   Button, Card, Empty, ErrorNote, Figure, Row, SectionTitle, Skeleton, SplitRail, StatusPill,
 } from '@/components/ui';
 import { IconList, IconChevron } from '@/components/Icons';
+import { Amt } from '@/components/Amount';
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -41,14 +42,14 @@ export default function DashboardPage() {
                 <div className="border-r border-[var(--rule)] p-3.5">
                   <Figure
                     label="Cash out"
-                    value={money(data.today.givenAmount)}
+                    amount={data.today.givenAmount}
                     sub="handed to customers"
                   />
                 </div>
                 <div className="p-3.5">
                   <Figure
                     label="Swiped"
-                    value={money(data.today.swipedAmount)}
+                    amount={data.today.swipedAmount}
                     sub="taken on the machines"
                   />
                 </div>
@@ -82,7 +83,7 @@ export default function DashboardPage() {
                 <Link href="/loans" className="border-r border-[var(--rule)] p-3.5 active:bg-[var(--paper-2)]">
                   <Figure
                     label="Payable · you owe"
-                    value={money(data.loans.outstanding)}
+                    amount={data.loans.outstanding}
                     tone="stamp"
                     sub={`${data.loans.openCount} open · ${money(data.loans.taken)} taken in`}
                   />
@@ -90,7 +91,7 @@ export default function DashboardPage() {
                 <Link href="/loans?direction=receivable" className="p-3.5 active:bg-[var(--paper-2)]">
                   <Figure
                     label="Receivable · owed to you"
-                    value={money(data.loans.receivable.outstanding)}
+                    amount={data.loans.receivable.outstanding}
                     tone="leaf"
                     sub={`${data.loans.receivable.openCount} open · ${money(data.loans.receivable.taken)} lent out`}
                   />
@@ -113,10 +114,10 @@ export default function DashboardPage() {
               <Card className="p-0">
                 <div className="grid grid-cols-2">
                   <div className="border-r border-[var(--rule)] p-3.5">
-                    <Figure label="Put in" value={money(data.capital.invested)} sub={`${data.capital.count} ${data.capital.count === 1 ? 'entry' : 'entries'}`} />
+                    <Figure label="Put in" amount={data.capital.invested} sub={`${data.capital.count} ${data.capital.count === 1 ? 'entry' : 'entries'}`} />
                   </div>
                   <div className="p-3.5">
-                    <Figure label="In the shop" value={money(data.capital.balance)} tone="leaf" sub={`${money(data.capital.withdrawn)} withdrawn`} />
+                    <Figure label="In the shop" amount={data.capital.balance} tone="leaf" sub={`${money(data.capital.withdrawn)} withdrawn`} />
                   </div>
                 </div>
               </Card>
@@ -181,24 +182,19 @@ function TopLine({ loans, settlement, cash }) {
     <section>
       <Card className="p-0">
         <div className="grid grid-cols-2">
-          <Link href="/loans" className="border-r border-[var(--rule)] p-3.5 active:bg-[var(--paper-2)]">
-            <Figure
-              label="Cash in Hand"
-              value={money(cash.inHand)}
-              size="lg"
-            />
+          <Link href="/loans" className="min-w-0 border-r border-[var(--rule)] p-3.5 active:bg-[var(--paper-2)]">
+            <Figure label="Cash in Hand" amount={cash.inHand} size="lg" />
           </Link>
-          <Link href="/settlements" className="p-3.5 active:bg-[var(--paper-2)]">
+          <Link href="/settlements" className="min-w-0 p-3.5 active:bg-[var(--paper-2)]">
             <Figure
               label="With the company"
-              value={money(settlement.pendingAmount)}
+              amount={settlement.pendingAmount}
               size="lg"
               tone="stamp"
               sub={`${settlement.pendingCount} to come back`}
             />
           </Link>
         </div>
-       
       </Card>
     </section>
   );
@@ -216,7 +212,7 @@ function Outstanding({ settlement }) {
       <SectionTitle>Money out with the card company</SectionTitle>
       <Card className="p-4">
         <p className="sum text-[38px] leading-none text-leaf-500 dark:text-leaf-400">
-          {money(settlement.pendingAmount)}
+          <Amt value={settlement.pendingAmount} />
         </p>
         <p className="mt-1.5 text-[12.5px] muted">
           {nothingOut
@@ -229,8 +225,18 @@ function Outstanding({ settlement }) {
         {/* What each card company is holding, largest first. */}
         {settlement.byCompany?.length > 0 && (
           <div className="ruled mt-3.5 border-t border-[var(--rule)]">
+            {/* Tapping a company opens where it is settled: its machine's
+                ledger, or the vendor list narrowed to it when it has several. */}
             {settlement.byCompany.map((c) => (
-              <div key={c.company} className="flex items-baseline justify-between gap-3 py-2.5">
+              <Link
+                key={c.company}
+                href={
+                  c.machineIds?.length === 1
+                    ? `/settlements/machine/${c.machineIds[0]}`
+                    : `/settlements?company=${encodeURIComponent(c.company)}`
+                }
+                className="-mx-4 flex items-center justify-between gap-3 px-4 py-2.5 active:bg-[var(--paper-2)]"
+              >
                 <div className="min-w-0">
                   <p className="truncate text-[14px] font-semibold">{c.company}</p>
                   <p className="ref mt-0.5 text-[10.5px] muted-2">
@@ -238,28 +244,17 @@ function Outstanding({ settlement }) {
                     {c.machines > 1 ? ` · ${c.machines} machines` : ''}
                   </p>
                 </div>
-                <p className="sum shrink-0 text-[16px] text-leaf-500 dark:text-leaf-400">{money(c.pendingAmount)}</p>
-              </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <p className="sum text-[16px] text-leaf-500 dark:text-leaf-400"><Amt value={c.pendingAmount} /></p>
+                  <span className="muted-2"><IconChevron size={15} /></span>
+                </div>
+              </Link>
             ))}
           </div>
         )}
 
-        <div className="mt-4 border-t border-[var(--rule)] pt-3.5">
-          <SplitRail
-            segments={[
-              { label: 'Received', value: settlement.receivedAmount, tone: 'leaf' },
-              { label: 'Owed', value: settlement.pendingAmount, tone: 'stamp' },
-            ]}
-          />
-        </div>
 
-        {!nothingOut && (
-          <Link href="/settlements" className="mt-3.5 block">
-            <Button variant="soft" className="w-full">
-              Settle entries <IconChevron size={15} />
-            </Button>
-          </Link>
-        )}
+  
       </Card>
     </section>
   );
@@ -283,9 +278,9 @@ function RecentRow({ txn }) {
         </p>
       </div>
       <div className="shrink-0 text-right">
-        <p className="sum text-[15px]">{money(txn.swipedAmount)}</p>
+        <p className="sum text-[15px]"><Amt value={txn.swipedAmount} /></p>
         <p className="sum text-[11px] !font-semibold text-leaf-500 dark:text-leaf-400">
-          +{money(txn.profit == null ? txn.margin : txn.profit)}
+          +<Amt value={txn.profit == null ? txn.margin : txn.profit} />
         </p>
       </div>
     </Link>

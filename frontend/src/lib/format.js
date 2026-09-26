@@ -17,6 +17,20 @@ export const money = (n) => `${CURRENCY} ${aed.format(Number(n) || 0)}`;
 export const moneyShort = (n) => `${CURRENCY} ${aedCompact.format(Math.round(Number(n) || 0))}`;
 
 /**
+ * Short form for tight tiles, in the K / L / Cr the shop counts in:
+ *   950 -> AED 950.00 · 85,498 -> AED 85.5K · 2,50,000 -> AED 2.5L · 8,38,99,546 -> AED 8.39Cr
+ * Up to two decimals, trailing zeros dropped; the sign is kept.
+ */
+export const moneyCompact = (n) => {
+  const v = Number(n) || 0;
+  const a = Math.abs(v);
+  if (a < 1000) return money(v);
+  const [div, unit] = a >= 1e7 ? [1e7, 'Cr'] : a >= 1e5 ? [1e5, 'L'] : [1e3, 'K'];
+  const short = Math.floor((a / div) * 100) / 100; // never rounds up past the real figure
+  return `${CURRENCY} ${v < 0 ? '-' : ''}${short.toFixed(2).replace(/\.?0+$/, '')}${unit}`;
+};
+
+/**
  * A vendor ledger balance in words: + the card company has paid extra,
  * - it has paid short and still owes it.
  */
